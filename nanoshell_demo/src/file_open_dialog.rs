@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::{
     cell::RefCell,
     mem::size_of,
@@ -12,19 +13,20 @@ use nanoshell::{
 };
 
 #[cfg(target_os = "macos")]
-use block::ConcreteBlock;
+mod mac_imports {
+    pub use block::ConcreteBlock;
+    pub use cocoa::{
+        base::id,
+        foundation::{NSArray, NSString, NSUInteger},
+    };
+    pub use objc::{
+        msg_send,
+        rc::{autoreleasepool, StrongPtr},
+    };
+}
 
 #[cfg(target_os = "macos")]
-use cocoa::{
-    base::id,
-    foundation::{NSArray, NSString, NSUInteger},
-};
-
-#[cfg(target_os = "macos")]
-use objc::{
-    msg_send,
-    rc::{autoreleasepool, StrongPtr},
-};
+use mac_imports::*;
 
 #[cfg(target_os = "windows")]
 mod win_imports {
@@ -33,10 +35,10 @@ mod win_imports {
     }
 
     pub use bindings::windows::win32::{system_services::*, windows_and_messaging::*};
+    pub use widestring::WideStr;
     pub use windows::TRUE;
 }
 
-use widestring::WideStr;
 #[cfg(target_os = "windows")]
 use win_imports::*;
 
