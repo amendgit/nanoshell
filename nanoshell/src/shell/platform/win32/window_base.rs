@@ -369,10 +369,10 @@ impl WindowBaseState {
         };
 
         let margins = MARGINS {
-            cx_left_width: margin,
-            cx_right_width: margin,
+            cx_left_width: 0,
+            cx_right_width: 0,
             cy_top_height: margin,
-            cy_bottom_height: margin,
+            cy_bottom_height: 0,
         };
         unsafe {
             DwmExtendFrameIntoClientArea(self.hwnd, &margins as *const _).as_platform_result()
@@ -487,7 +487,7 @@ impl WindowBaseState {
         &self,
         _h_wnd: HWND,
         msg: u32,
-        w_param: WPARAM,
+        _w_param: WPARAM,
         l_param: LPARAM,
     ) -> Option<LRESULT> {
         match msg as i32 {
@@ -515,11 +515,7 @@ impl WindowBaseState {
             }
             WM_NCCALCSIZE => {
                 if self.remove_border() {
-                    if w_param.0 == 1 {
-                        Some(LRESULT(1))
-                    } else {
-                        None
-                    }
+                    Some(LRESULT(1))
                 } else {
                     None
                 }
