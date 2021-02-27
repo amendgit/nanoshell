@@ -13,4 +13,9 @@ nanoshell_build = { path = "../nanoshell_build" }
 [dependencies]
 nanoshell = { path = "../nanoshell" }
 env_logger = "0.8.3"
+serde = { version = "1.0.119", features = ["derive"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.24"
+objc = "0.2.7"
+block = "0.1.6"

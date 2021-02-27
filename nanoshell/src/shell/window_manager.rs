@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{borrow::Borrow, collections::HashMap, rc::Rc};
 
 use velcro::hash_map;
 
@@ -11,8 +11,10 @@ use crate::{
 };
 
 use super::{
-    constants::*, platform::window::PlatformWindow, Context, EngineHandle, PlatformWindowDelegate,
-    Window, WindowHandle, WindowMethodCall, WindowMethodCallReply,
+    constants::*,
+    platform::window::{PlatformWindow, PlatformWindowType},
+    Context, EngineHandle, PlatformWindowDelegate, Window, WindowHandle, WindowMethodCall,
+    WindowMethodCallReply,
 };
 
 pub struct WindowManager {
@@ -114,6 +116,13 @@ impl WindowManager {
             .ok_log();
 
         window_handle
+    }
+
+    pub fn get_platform_window(&self, handle: WindowHandle) -> Option<PlatformWindowType> {
+        self.windows
+            .borrow()
+            .get(&handle)
+            .map(|w| w.platform_window.borrow().get_platform_window())
     }
 
     pub(super) fn remove_window(&mut self, window: &Window) {

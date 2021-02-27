@@ -26,6 +26,8 @@ use super::{
     window_menu::{WindowMenu, WindowMenuDelegate},
 };
 
+pub type PlatformWindowType = HWND;
+
 pub struct PlatformWindow {
     context: Rc<Context>,
     hwnd: Cell<HWND>,
@@ -81,16 +83,6 @@ impl PlatformWindow {
             let mut rect: RECT = RECT::default();
             GetClientRect(self.hwnd(), &mut rect as *mut _);
 
-            // println!(
-            //     "CLIENT SIZE: {} {} {} {}\n",
-            //     rect.left, rect.top, rect.right, rect.bottom
-            // );
-
-            // println!(
-            //     "Layouting {} {}",
-            //     rect.right - rect.left,
-            //     rect.bottom - rect.top
-            // );
             MoveWindow(
                 self.child_hwnd(),
                 rect.left,
@@ -99,11 +91,11 @@ impl PlatformWindow {
                 rect.bottom - rect.top,
                 TRUE,
             );
-            // SendMessageW(self.child_hwnd(), 0x02E2, WPARAM(0), LPARAM(0));
-            // SendMessageW(self.child_hwnd(), 0x02E2, WPARAM(0), LPARAM(0));
-            // let size : i32 = (rect.right - rect.left) | ((rect.bottom - rect.top) >> 16);
-            // SendMessageW(self.child_hwnd(), WM_SIZE as u32, WPARAM(0), LPARAM(size as isize));
         }
+    }
+
+    pub fn get_platform_window(&self) -> PlatformWindowType {
+        self.hwnd()
     }
 
     pub fn assign_weak_self(&self, weak: Weak<PlatformWindow>, engine: &PlatformEngine) {

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:nanoshell/nanoshell.dart';
+import 'package:nanoshell_demo/file_open_dialog.dart';
+import 'package:nanoshell_demo/util.dart';
+import 'package:path/path.dart';
 
 import 'drag_drop.dart';
 import 'modal.dart';
@@ -66,7 +69,7 @@ class _HomeState extends State<Home> {
               ],
             ),
           ),
-          Container(
+          Padding(
             padding: EdgeInsets.all(20).copyWith(top: 0),
             child: TextButton(
               onPressed: () async {
@@ -92,12 +95,42 @@ class _HomeState extends State<Home> {
             padding: const EdgeInsets.all(20.0).copyWith(top: 0),
             child: PopupMenu(),
           ),
+          Padding(
+            padding: const EdgeInsets.all(20.0).copyWith(top: 0),
+            child: TextButton(
+              onPressed: () async {
+                final request =
+                    FileOpenRequest(parentWindow: Window.of(context).handle);
+                final file = await showFileOpenDialog(request);
+                setState(() {
+                  if (file != null) {
+                    final name = basename(file);
+                    fileDialogResult = 'Chosen: $name';
+                  } else {
+                    fileDialogResult = null;
+                  }
+                });
+              },
+              child: Text('Open file dialog'),
+            ),
+          ),
+          AnimatedVisibility(
+            visible: fileDialogResult != null,
+            duration: Duration(milliseconds: 200),
+            alignment: Alignment.center,
+            child: Padding(
+                padding: const EdgeInsets.all(20.0).copyWith(top: 0),
+                child: Center(child: Text(fileDialogResult ?? ''))),
+            direction: Axis.vertical,
+          ),
         ],
       ),
     );
   }
 
   dynamic _modalWindowResult;
+
+  String? fileDialogResult;
 
   Window? _dragDropWindow;
 }

@@ -14,6 +14,8 @@ use super::{
     menu::PlatformMenu,
 };
 
+pub type PlatformWindowType = isize;
+
 pub struct PlatformWindow {}
 
 #[allow(unused_variables)]
@@ -27,6 +29,10 @@ impl PlatformWindow {
     }
 
     pub fn assign_weak_self(&self, weak: Weak<PlatformWindow>, engine: &PlatformEngine) {}
+
+    pub fn get_platform_window(&self) -> PlatformWindowType {
+        Default::default()
+    }
 
     pub fn show(&self) -> PlatformResult<()> {
         Err(PlatformError::NotImplemented)

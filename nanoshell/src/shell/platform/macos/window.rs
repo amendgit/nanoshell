@@ -6,14 +6,13 @@ use std::{
     time::Duration,
 };
 
-use block::ConcreteBlock;
 use cocoa::appkit::NSScreen;
 use cocoa::{
     appkit::{
         NSEvent, NSEventType, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
     },
     base::{id, nil, BOOL, NO, YES},
-    foundation::{NSArray, NSInteger, NSPoint, NSRect, NSRunLoop, NSSize, NSString, NSUInteger},
+    foundation::{NSArray, NSInteger, NSPoint, NSRect, NSSize, NSString, NSUInteger},
 };
 use core_foundation::date::CFAbsoluteTimeGetCurrent;
 
@@ -45,9 +44,11 @@ use super::{
     utils::*,
 };
 
+pub type PlatformWindowType = StrongPtr;
+
 pub struct PlatformWindow {
     context: Rc<Context>,
-    platform_window: StrongPtr,
+    platform_window: PlatformWindowType,
     parent_platform_window: Option<WeakPtr>,
     platform_delegate: StrongPtr,
     weak_self: LateRefCell<Weak<PlatformWindow>>,
@@ -124,6 +125,10 @@ impl PlatformWindow {
         let drag_context = DragContext::new(self.context.clone(), weak.clone());
         drag_context.register(*self.platform_window);
         self.drag_context.set(drag_context);
+    }
+
+    pub fn get_platform_window(&self) -> PlatformWindowType {
+        self.platform_window.clone()
     }
 
     pub fn set_geometry(
@@ -631,10 +636,15 @@ impl PlatformWindow {
             // this method is likely being invoked from dispatch_async through flutter
             // platform task executor; Showing the popup menu from dispatch_async will block
             // the dispatch queue; Instead we schedule this on next run loop turn, which
-            // doesn't block the dispatch queue
-            let runloop: id = NSRunLoop::currentRunLoop();
-            let block = ConcreteBlock::new(cb).copy();
-            let () = msg_send![runloop, performBlock:&*block];
+            // doesn't block the dispatch queue;
+            //
+            // Note there is a special support in MacOS PlatformRunLoop when scheduling tasks
+            // run in 0 time to not block the dispatch queue.
+            self.context
+                .run_loop
+                .borrow()
+                .schedule(cb, Duration::from_secs(0))
+                .detach();
         }
     }
 

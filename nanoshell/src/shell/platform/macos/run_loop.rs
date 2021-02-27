@@ -5,13 +5,14 @@ use std::{
     time::Duration,
 };
 
+use block::ConcreteBlock;
 use cocoa::{
     appkit::{
         NSApplication, NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular,
         NSEventType::NSApplicationDefined,
     },
     base::{id, nil, YES},
-    foundation::NSPoint,
+    foundation::{NSPoint, NSRunLoop},
 };
 
 use dispatch::ffi::{
@@ -68,12 +69,26 @@ impl PlatformRunLoop {
 
         let delta = in_time.as_nanos() as i64;
         unsafe {
-            dispatch_after_f(
-                dispatch_time(DISPATCH_TIME_NOW, delta),
-                dispatch_get_main_queue(),
-                Box::into_raw(data) as *mut _,
-                Self::on_callback,
-            );
+            if delta > 0 {
+                dispatch_after_f(
+                    dispatch_time(DISPATCH_TIME_NOW, delta),
+                    dispatch_get_main_queue(),
+                    Box::into_raw(data) as *mut _,
+                    Self::on_callback,
+                );
+            } else {
+                // as a special case, with in_time == 0, schedule the callback
+                // to be run on directly on NSRunLoop instead of dispatch queue; This
+                // is necessary for tasks that run inner run loop (i.e. popup menu,
+                // modal dialogs, etc) to not block the dispatch queue
+                let data = Box::into_raw(data) as *mut _;
+                let cb = move || {
+                    Self::on_callback(data);
+                };
+                let runloop: id = NSRunLoop::currentRunLoop();
+                let block = ConcreteBlock::new(cb).copy();
+                let () = msg_send![runloop, performBlock:&*block];
+            }
         }
 
         handle

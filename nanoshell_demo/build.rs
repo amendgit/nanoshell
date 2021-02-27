@@ -4,8 +4,8 @@ fn main() {
     let build = FlutterBuild::new(FlutterBuildOptions {
         target_file: None,
         local_engine: match FlutterBuild::build_mode().as_str() {
-            // "debug" => Some("host_debug".into()),
-            "debug" => Some("host_debug_unopt".into()),
+            "debug" => Some("host_debug".into()),
+            // "debug" => Some("host_debug_unopt".into()),
             "release" => Some("host_release".into()),
             _ => None,
         },

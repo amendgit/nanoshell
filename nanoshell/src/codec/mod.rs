@@ -26,6 +26,19 @@ pub struct MethodCallError<V> {
     pub details: V,
 }
 
+impl<V> MethodCallError<V> {
+    pub fn from_code_message(code: &str, message: &str) -> Self
+    where
+        V: Default,
+    {
+        Self {
+            code: code.into(),
+            message: Some(message.into()),
+            details: Default::default(),
+        }
+    }
+}
+
 impl<V> From<Error> for MethodCallError<V>
 where
     V: Default,
