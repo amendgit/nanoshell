@@ -218,8 +218,8 @@ class _RenderWindowLayout extends RenderProxyBox {
 
 Size _snapToPixelBoundary(Size size) {
   final ratio = WidgetsBinding.instance!.window.devicePixelRatio;
-  size = size * ratio;
+  size = size / ratio;
   size = Size(size.width.ceilToDouble(), size.height.ceilToDouble());
-  size /= ratio;
+  size *= ratio;
   return size;
 }
