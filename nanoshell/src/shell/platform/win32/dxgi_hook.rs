@@ -162,10 +162,21 @@ unsafe fn present1(
             return ErrorCode(0);
         }
     }
+
     let ignore = IGNORE_NEXT_PRESENT.with(|v| v.replace(false));
     if ignore {
         return ErrorCode(0);
     }
+
+    // No dirty rect means first angle flip after resizing surface; However during normal surface
+    // resize, triggered from AngleSurfaceManager::ResizeSurface, this should be ignored by the
+    // code above; So if we get here, it means Angle resized surface on it's own, as a result of
+    // previous frame SwapBuffer call, where it noticed change in window dimentions; As such we
+    // need to ignore it, otherwise it causes glitches
+    if parameters.dirty_rects_count == 0 {
+        return ErrorCode(0);
+    }
+
     let global = GLOBAL.lock().unwrap();
     global.present1.unwrap()(this, sync_interval, present_flags, p_present_parameters)
 }
