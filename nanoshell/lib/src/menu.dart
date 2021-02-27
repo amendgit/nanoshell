@@ -242,7 +242,7 @@ class Menu {
         if (i.submenu != null) {
           outAdded.add(i.submenu!);
         }
-        res.add(_MenuElement(id: _nextId++, item: i));
+        res.add(_MenuElement(id: _nextItemId++, item: i));
       }
     }
 
@@ -278,9 +278,9 @@ class Menu {
     return identical(this, other) ||
         (other is Menu && _ephemeral && other._ephemeral);
   }
-
-  int _nextId = 1;
 }
+
+int _nextItemId = 1;
 
 class MenuHandle {
   const MenuHandle(this.value);
