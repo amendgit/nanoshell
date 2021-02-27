@@ -62,7 +62,7 @@ class MenuItem {
       (other is MenuItem && title == other.title && submenu == other.submenu);
 
   @override
-  int get hashCode => hashValues(title, action, submenu);
+  int get hashCode => hashValues(title, separator, submenu);
 }
 
 typedef MenuBuilder = List<MenuItem> Function();
