@@ -150,7 +150,7 @@ class _RenderWindowLayoutInner extends RenderProxyBox {
     } else {
       _geometryInProgress = true;
       await builtWindow.updateWindowSize(
-          WindowManager.instance.currentWindow, size);
+          WindowManager.instance.currentWindow, _snapToPixelBoundary(size));
       _geometryInProgress = false;
       if (_geometryPending) {
         _geometryPending = false;
@@ -196,7 +196,8 @@ class _RenderWindowLayout extends RenderProxyBox {
         SchedulerBinding.instance!.addPostFrameCallback((timeStamp) async {
           final w = child!.getMaxIntrinsicWidth(double.infinity);
           final h = child!.getMaxIntrinsicHeight(double.infinity);
-          await builtWindow.initializeWindow(win, Size(w, h));
+          await builtWindow.initializeWindow(
+              win, _snapToPixelBoundary(Size(w, h)));
           await win.readyToShow();
         });
       });
@@ -213,4 +214,12 @@ class _RenderWindowLayout extends RenderProxyBox {
   }
 
   bool hasLayout = false;
+}
+
+Size _snapToPixelBoundary(Size size) {
+  final ratio = WidgetsBinding.instance!.window.devicePixelRatio;
+  size = size * ratio;
+  size = Size(size.width.ceilToDouble(), size.height.ceilToDouble());
+  size /= ratio;
+  return size;
 }
