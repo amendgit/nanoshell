@@ -1,6 +1,9 @@
 use std::{
     cell::RefCell,
+    mem::size_of,
+    ptr::null_mut,
     rc::{Rc, Weak},
+    time::Duration,
 };
 
 use nanoshell::{
@@ -18,8 +21,24 @@ use cocoa::{
 };
 
 #[cfg(target_os = "macos")]
-use objc::msg_send;
-use objc::rc::{autoreleasepool, StrongPtr};
+use objc::{
+    msg_send,
+    rc::{autoreleasepool, StrongPtr},
+};
+
+#[cfg(target_os = "windows")]
+mod win_imports {
+    mod bindings {
+        ::windows::include_bindings!();
+    }
+
+    pub use bindings::windows::win32::{system_services::*, windows_and_messaging::*};
+    pub use windows::TRUE;
+}
+
+use widestring::WideStr;
+#[cfg(target_os = "windows")]
+use win_imports::*;
 
 pub struct FileOpenDialogService {
     context: Rc<Context>,
@@ -122,6 +141,63 @@ impl FileOpenDialogService {
             let len = NSString::len(ns_string);
             let bytes = slice::from_raw_parts(bytes, len);
             std::str::from_utf8(bytes).unwrap().into()
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn open_file_dialog(&self, request: FileOpenRequest, reply: MethodCallReply<Value>) {
+        let win = self
+            .context
+            .window_manager
+            .borrow()
+            .get_platform_window(request.parent_window);
+
+        if let Some(win) = win {
+            let cb = move || {
+                let mut file = Vec::<u16>::new();
+                file.resize(4096, 0);
+
+                let mut ofn = OPENFILENAMEW {
+                    l_struct_size: size_of::<OPENFILENAMEW>() as u32,
+                    hwnd_owner: HWND(win.0),
+                    h_instance: HINSTANCE(0),
+                    lpstr_filter: null_mut(),
+                    lpstr_custom_filter: null_mut(),
+                    n_max_cust_filter: 0,
+                    n_filter_index: 0,
+                    lpstr_file: file.as_mut_ptr(),
+                    n_max_file: file.len() as u32,
+                    lpstr_file_title: null_mut(),
+                    n_max_file_title: 0,
+                    lpstr_initial_dir: null_mut(),
+                    lpstr_title: null_mut(),
+                    flags: 0,
+                    n_file_offset: 0,
+                    n_file_extension: 0,
+                    lpstr_def_ext: null_mut(),
+                    l_cust_data: LPARAM(0),
+                    lpfn_hook: None,
+                    lp_template_name: null_mut(),
+                    pv_reserved: null_mut(),
+                    dw_reserved: 0,
+                    flags_ex: 0,
+                };
+
+                let res = unsafe { GetOpenFileNameW(&mut ofn as *mut _) == TRUE };
+                if !res {
+                    reply.send_ok(Value::Null);
+                } else {
+                    let name = WideStr::from_slice(&file).to_string_lossy();
+                    reply.send_ok(Value::String(name));
+                }
+            };
+            self.context
+                .run_loop
+                .borrow()
+                .schedule(cb, Duration::from_secs(0))
+                .detach();
+        } else {
+            reply.send_error("no_window", Some("Platform window not found"), Value::Null);
         }
     }
 }

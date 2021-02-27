@@ -450,7 +450,6 @@ impl PlatformWindow {
                 SetFocus(self.child_hwnd());
             },
             WM_ACTIVATE => {
-                println!("ACTIVATE {} {}", w_param.0, l_param.0);
             }
             WM_NCCALCSIZE => unsafe {
                 // No redirection surface, or redireciton surface with removed border; In this case we

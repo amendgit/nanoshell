@@ -19,3 +19,10 @@ serde = { version = "1.0.119", features = ["derive"] }
 cocoa = "0.24"
 objc = "0.2.7"
 block = "0.1.6"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = "0.3.1"
+widestring = "0.2.2"
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+windows = "0.3.1"
