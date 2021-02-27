@@ -74,7 +74,7 @@ class _HomeState extends State<Home> {
             child: TextButton(
               onPressed: () async {
                 if (_dragDropWindow != null) {
-                  await _dragDropWindow!.hide();
+                  await _dragDropWindow!.close();
                   _dragDropWindow = null;
                 } else {
                   _dragDropWindow =
