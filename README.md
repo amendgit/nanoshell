@@ -1,5 +1,8 @@
 # Nanoshell (Experimental embedder for Flutter)
 
+Video:<br/>
+[![](https://img.youtube.com/vi/2nzIkQvYnvM/hq1.jpg)](http://www.youtube.com/watch?v=2nzIkQvYnvM "")
+
 ## Features
 
 - Leverages existing desktop embedders on each platform
