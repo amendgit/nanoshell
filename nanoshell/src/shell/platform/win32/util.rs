@@ -65,6 +65,15 @@ impl ErrorCodeExt for ErrorCode {
     }
 }
 
+pub fn clipboard_format_to_string(format: u32) -> String {
+    let mut buf: [u16; 4096] = [0; 4096];
+    unsafe {
+        let len = GetClipboardFormatNameW(format, buf.as_mut_ptr() as *mut _, buf.len() as i32);
+
+        String::from_utf16_lossy(&buf[..len as usize])
+    }
+}
+
 pub trait BoolResultExt {
     fn as_platform_result(&self) -> PlatformResult<()>;
 }
