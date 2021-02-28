@@ -130,7 +130,7 @@ class DragSource extends StatelessWidget {
           color: Colors.blueGrey.shade800,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Colors.white,
+            color: Colors.lightBlueAccent,
           ),
         ),
         child: Center(child: Text(title)),
@@ -153,14 +153,14 @@ class _DropTargetState extends State<DropTarget> {
       child: AnimatedContainer(
         decoration: BoxDecoration(
           color: dropping
-              ? Colors.deepPurple.shade900
-              : Colors.deepPurple.shade900.withAlpha(0),
+              ? Colors.amber.withAlpha(50)
+              : Colors.amber.withAlpha(20),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: Colors.white,
+            color: Colors.amber,
           ),
         ),
-        duration: Duration(milliseconds: 300),
+        duration: Duration(milliseconds: 200),
         padding: EdgeInsets.all(20),
         child: ClipRect(
           child: ConstrainedBox(
