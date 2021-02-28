@@ -281,49 +281,50 @@ unsafe extern "system" fn d3d11_create_device(
         pp_immediate_context,
     );
 
-    let device = (&*pp_device).clone().unwrap();
-    let device = device.cast::<IDXGIDevice>().unwrap();
-    let mut adapter: Option<IDXGIAdapter> = None;
-    device.GetAdapter(&mut adapter as *mut _).ok_log();
-    if let Some(adapter) = adapter {
-        let mut factory: Option<IDXGIFactory> = None;
-        adapter
-            .GetParent(
-                &IDXGIFactory::IID as *const _,
-                &mut factory as *mut _ as *mut *mut ::std::ffi::c_void,
-            )
-            .ok_log();
-
-        let factory = factory.and_then(|f| f.cast::<IDXGIFactory2>().ok());
-
-        if let Some(factory) = factory {
-            let vtable = ::windows::Interface::vtable(&factory);
-
-            let dt = ManuallyDrop::new(Box::new(
-                RawDetour::new(
-                    vtable.15 as *const (),
-                    create_swap_chain_for_hwnd as *const (),
+    if let Some(device) = (&*pp_device).clone() {
+        let device = device.cast::<IDXGIDevice>().unwrap();
+        let mut adapter: Option<IDXGIAdapter> = None;
+        device.GetAdapter(&mut adapter as *mut _).ok_log();
+        if let Some(adapter) = adapter {
+            let mut factory: Option<IDXGIFactory> = None;
+            adapter
+                .GetParent(
+                    &IDXGIFactory::IID as *const _,
+                    &mut factory as *mut _ as *mut *mut ::std::ffi::c_void,
                 )
-                .unwrap(),
-            ));
-            global
-                .create_swap_chain_for_hwnd
-                .replace(mem::transmute(dt.trampoline()));
+                .ok_log();
 
-            dt.enable().ok();
+            let factory = factory.and_then(|f| f.cast::<IDXGIFactory2>().ok());
 
-            let dt = ManuallyDrop::new(Box::new(
-                RawDetour::new(
-                    vtable.24 as *const (),
-                    create_swap_chain_for_composition as *const (),
-                )
-                .unwrap(),
-            ));
-            global
-                .create_swap_chain_for_composition
-                .replace(mem::transmute(dt.trampoline()));
+            if let Some(factory) = factory {
+                let vtable = ::windows::Interface::vtable(&factory);
 
-            dt.enable().ok();
+                let dt = ManuallyDrop::new(Box::new(
+                    RawDetour::new(
+                        vtable.15 as *const (),
+                        create_swap_chain_for_hwnd as *const (),
+                    )
+                    .unwrap(),
+                ));
+                global
+                    .create_swap_chain_for_hwnd
+                    .replace(mem::transmute(dt.trampoline()));
+
+                dt.enable().ok();
+
+                let dt = ManuallyDrop::new(Box::new(
+                    RawDetour::new(
+                        vtable.24 as *const (),
+                        create_swap_chain_for_composition as *const (),
+                    )
+                    .unwrap(),
+                ));
+                global
+                    .create_swap_chain_for_composition
+                    .replace(mem::transmute(dt.trampoline()));
+
+                dt.enable().ok();
+            }
         }
     }
 
