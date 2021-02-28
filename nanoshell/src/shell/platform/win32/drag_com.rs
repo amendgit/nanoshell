@@ -542,9 +542,9 @@ impl DataObject {
                             *medium = STGMEDIUM_ {
                                 tymed: TYMED::TYMED_ISTREAM.0 as u32,
                                 data: get_raw_ptr(&stream) as isize,
-                                p_unk_for_release: get_raw_ptr(&stream),
+                                p_unk_for_release: 0,
                             };
-                            forget(stream); // p_unk_for_release will take care of it
+                            forget(stream); // will be released through sgtmedium
 
                             ErrorCode(S_OK as u32)
                         } else {
