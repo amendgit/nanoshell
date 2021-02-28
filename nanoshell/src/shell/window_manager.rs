@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::HashMap, rc::Rc};
+use std::{borrow::Borrow, collections::HashMap, rc::Rc, time::Duration};
 
 use velcro::hash_map;
 
@@ -126,11 +126,29 @@ impl WindowManager {
     }
 
     pub(super) fn remove_window(&mut self, window: &Window) {
+        let engine_handle = window.engine_handle;
+        let context_copy = self.context.clone();
+
+        // This is a bit hacky; When engine destroy is triggered from flutter
+        // platform task runner, we need to schedule this on next run loop turn otherwise
+        // it may cause crashes. This particular hack could be avoided by scheduling
+        // every flutter message callback on run loop, but is probably not worth the
+        // overhead.
         self.context
-            .engine_manager
-            .borrow_mut()
-            .remove_engine(window.engine_handle)
-            .ok_log();
+            .run_loop
+            .borrow()
+            .schedule(
+                move || {
+                    context_copy
+                        .engine_manager
+                        .borrow_mut()
+                        .remove_engine(engine_handle)
+                        .ok_log();
+                },
+                Duration::from_secs(0),
+            )
+            .detach();
+
         self.windows.remove(&window.window_handle);
     }
 
