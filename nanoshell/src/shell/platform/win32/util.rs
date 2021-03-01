@@ -1,5 +1,6 @@
 use std::panic::Location;
 
+use const_cstr::const_cstr;
 use log::{Level, Record};
 use widestring::WideCString;
 
@@ -126,6 +127,17 @@ pub(super) fn hresult_description(hr: u32) -> Option<String> {
         let result = WideCString::from_raw(message_buffer);
         LocalFree(message_buffer as isize);
         result.to_string().ok()
+    }
+}
+
+pub(super) fn direct_composition_supported() -> bool {
+    unsafe {
+        let handle = GetModuleHandleW(utf16_lit::utf16_null!("dcomp.dll").as_ptr());
+        if handle != 0 {
+            GetProcAddress(handle, const_cstr!("DCompositionCreateDevice").as_ptr()).is_some()
+        } else {
+            false
+        }
     }
 }
 

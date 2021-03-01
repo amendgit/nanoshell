@@ -2,10 +2,7 @@ use std::{ptr::null_mut, rc::Rc};
 
 use crate::shell::Context;
 
-use super::{
-    all_bindings::*, dpi::become_dpi_aware, dxgi_hook::init_dxgi_hook, error::PlatformResult,
-    util::ErrorCodeExt,
-};
+use super::{all_bindings::*, dpi::become_dpi_aware, dxgi_hook::init_dxgi_hook, error::PlatformResult, util::{ErrorCodeExt, direct_composition_supported}};
 
 pub fn init_platform(_context: Rc<Context>) -> PlatformResult<()> {
     unsafe {
@@ -20,7 +17,9 @@ pub fn init_platform(_context: Rc<Context>) -> PlatformResult<()> {
 
         OleInitialize(null_mut()).as_platform_result()?;
     }
-    init_dxgi_hook();
+    if direct_composition_supported() {
+        init_dxgi_hook();
+    }
     become_dpi_aware();
     Ok(())
 }

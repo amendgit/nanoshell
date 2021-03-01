@@ -3,7 +3,10 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use super::{all_bindings::*, util::to_utf16};
+use super::{
+    all_bindings::*,
+    util::{direct_composition_supported, to_utf16},
+};
 
 use const_cstr::const_cstr;
 use utf16_lit::utf16_null;
@@ -91,22 +94,16 @@ pub trait WindowAdapter {
     where
         Self: Sized,
     {
-        // Try no redirection bitmap first
-        let mut res = self.create_window_custom(
+        let mut ex_flags = WS_EX_APPWINDOW;
+        if direct_composition_supported() {
+            ex_flags |= WS_EX_NOREDIRECTIONBITMAP;
+        }
+
+        self.create_window_custom(
             title,
             (WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_SYSMENU | WS_DLGFRAME) as u32,
-            (WS_EX_APPWINDOW | WS_EX_NOREDIRECTIONBITMAP) as u32,
-        );
-
-        // if that failed, retry without
-        if res.0 == 0 {
-            res = self.create_window_custom(
-                title,
-                (WS_OVERLAPPEDWINDOW | WS_THICKFRAME | WS_SYSMENU | WS_DLGFRAME) as u32,
-                (WS_EX_APPWINDOW) as u32,
-            )
-        }
-        res
+            ex_flags as u32,
+        )
     }
 
     fn create_window_custom(&self, title: &str, style: u32, ex_style: u32) -> HWND

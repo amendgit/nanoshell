@@ -116,10 +116,6 @@ impl PlatformWindow {
             self.flutter_controller
                 .set(FlutterDesktopViewControllerCreate(100, 100, engine.handle));
 
-            FlutterDesktopViewControllerEnableDirectComposition(
-                *self.flutter_controller.borrow(),
-                !self.get_state().has_redirection_surface(),
-            );
             let view = FlutterDesktopViewControllerGetView(*self.flutter_controller.borrow());
             self.child_hwnd.set(FlutterDesktopViewGetHWND(view));
 
@@ -449,12 +445,10 @@ impl PlatformWindow {
             WM_SETFOCUS => unsafe {
                 SetFocus(self.child_hwnd());
             },
-            WM_ACTIVATE => {
-            }
+            WM_ACTIVATE => {}
             WM_NCCALCSIZE => unsafe {
                 // No redirection surface, or redireciton surface with removed border; In this case we
                 // need to resize child in WM_NCALCSIZE for better performance
-
                 if w_param.0 == 1
                     && (!self.get_state().has_redirection_surface()
                         || self.get_state().remove_border())
