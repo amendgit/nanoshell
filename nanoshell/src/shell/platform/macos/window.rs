@@ -30,8 +30,9 @@ use NSEventType::{NSLeftMouseDown, NSLeftMouseUp, NSMouseMoved, NSRightMouseDown
 use crate::{
     codec::Value,
     shell::{
-        Context, DragEffect, DragRequest, PlatformWindowDelegate, Point, PopupMenuRequest, Size,
-        WindowFrame, WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        Context, DragEffect, DragRequest, PlatformWindowDelegate, Point, PopupMenuRequest,
+        PopupMenuResponse, Size, WindowFrame, WindowGeometry, WindowGeometryFlags,
+        WindowGeometryRequest, WindowStyle,
     },
     util::{LateRefCell, OkLog},
 };
@@ -611,7 +612,7 @@ impl PlatformWindow {
 
     pub fn show_popup_menu<F>(&self, menu: Rc<PlatformMenu>, request: PopupMenuRequest, on_done: F)
     where
-        F: FnOnce(PlatformResult<()>) -> () + 'static,
+        F: FnOnce(PlatformResult<PopupMenuResponse>) -> () + 'static,
     {
         unsafe {
             // cocoa eats mouse up on popup menu
@@ -624,13 +625,15 @@ impl PlatformWindow {
             let on_done = RefCell::new(Some(Box::new(on_done)));
             let weak = self.weak_self.clone_value();
             let cb = move || {
-                let _: () = msg_send![*menu, popUpMenuPositioningItem:nil atLocation:position inView:view.clone()];
+                let item_selected: BOOL = msg_send![*menu, popUpMenuPositioningItem:nil atLocation:position inView:view.clone()];
                 let on_done = on_done.take();
                 if let Some(s) = weak.upgrade() {
                     s.synthetize_mouse_move_if_needed();
                 }
                 if let Some(on_done) = on_done {
-                    on_done(Ok(()));
+                    on_done(Ok(PopupMenuResponse {
+                        item_selected: item_selected == YES,
+                    }));
                 }
             };
             // this method is likely being invoked from dispatch_async through flutter
@@ -646,6 +649,18 @@ impl PlatformWindow {
                 .schedule(cb, Duration::from_secs(0))
                 .detach();
         }
+    }
+
+    pub fn hide_popup_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        unsafe {
+            let _: () = msg_send![*menu.menu, cancelTracking];
+        }
+        Ok(())
+    }
+
+    pub fn show_system_menu(&self) -> PlatformResult<()> {
+        // no system menu in mac
+        Ok(())
     }
 
     pub(super) fn with_delegate<F>(&self, callback: F)
