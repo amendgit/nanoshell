@@ -18,12 +18,12 @@ fn main() -> () {
                 SWP_NOZORDER, SWP_NOSIZE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_FRAMECHANGED,
                 WS_VISIBLE, HTNOWHERE, WS_EX_APPWINDOW, WS_DLGFRAME, WS_EX_NOACTIVATE, WS_EX_LAYOUTRTL, WS_EX_RTLREADING,
                 WS_EX_NOREDIRECTIONBITMAP,
-                FLASHW_ALL, SC_CLOSE, MF_BYCOMMAND, MF_GRAYED, MF_DISABLED, MF_POPUP, GWL_HWNDPARENT,
+                FLASHW_ALL, SC_CLOSE, MF_BYCOMMAND, MF_BYPOSITION, MF_GRAYED, MF_DISABLED, MF_POPUP, GWL_HWNDPARENT, MF_HILITE, MF_MOUSESELECT,
                 MIM_MENUDATA, MIM_STYLE, MNS_NOTIFYBYPOS, MIM_BACKGROUND,
                 MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
-                MFT_STRING, MFT_SEPARATOR, MFS_DISABLED, MFS_CHECKED, MFS_ENABLED, MFT_OWNERDRAW,
+                MFT_STRING, MFT_SEPARATOR, MFS_DISABLED, MFS_CHECKED, MFS_ENABLED, MFT_OWNERDRAW, MFS_HILITE,
                 WH_MSGFILTER, MSGF_MENU,
-                UIS_CLEAR, UIS_SET, UISF_HIDEACCEL, VK_LBUTTON, VK_RBUTTON, VK_LEFT, VK_RIGHT,
+                UIS_CLEAR, UIS_SET, UISF_HIDEACCEL, VK_LBUTTON, VK_RBUTTON, VK_LEFT, VK_RIGHT, VK_DOWN,
                 CF_HDROP, MK_LBUTTON,
                 DRAGDROP_S_CANCEL, DRAGDROP_S_DROP, DRAGDROP_S_USEDEFAULTCURSORS,
                 RDW_FRAME,
@@ -31,14 +31,18 @@ fn main() -> () {
                 HTLEFT, HTRIGHT, HTTRANSPARENT,
                 DCX_WINDOW, DCX_INTERSECTRGN, FACILITY_WIN32,
                 // Messages
-                WM_DPICHANGED, WM_DESTROY, WM_SIZE, WM_ACTIVATE, WM_NCCREATE, WM_NCDESTROY,
+                WM_DPICHANGED, WM_DESTROY, WM_SIZE, WM_ACTIVATE, WM_NCCREATE, WM_NCDESTROY, WM_ENTERMENULOOP,
                 WM_QUIT, WM_DISPLAYCHANGE, WM_SHOWWINDOW, WM_CLOSE, WM_PAINT, WM_GETMINMAXINFO,
                 WM_WINDOWPOSCHANGING, WM_NCCALCSIZE, WM_MOUSEMOVE, WM_NCMOUSEMOVE, WM_NCHITTEST, WM_NCMOUSEHOVER, WM_NCPAINT,
                 WM_MOUSEFIRST, WM_MOUSELAST, WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN, WM_LBUTTONUP, WM_RBUTTONUP,
                 WM_MBUTTONUP, WM_XBUTTONUP,
                 WM_TIMER, WM_MENUCOMMAND, WM_COMMAND, WM_USER, WM_MOUSELEAVE, WM_CANCELMODE, WM_MENUSELECT,
-                WM_CHANGEUISTATE, WM_UPDATEUISTATE, WM_KEYDOWN, WM_SETFOCUS, WM_DWMCOMPOSITIONCHANGED,
+                WM_CHANGEUISTATE, WM_UPDATEUISTATE, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYUP, WM_SETFOCUS, WM_DWMCOMPOSITIONCHANGED,
                 WM_NCLBUTTONDOWN, WM_ERASEBKGND, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
+                WM_QUERYUISTATE, WM_SYSCOMMAND,
+                TPM_LEFTALIGN, TPM_RIGHTALIGN, TPM_TOPALIGN, TPM_BOTTOMALIGN, TPM_HORIZONTAL, TPM_VERTICAL,
+                TPM_RETURNCMD,
+                TME_LEAVE,
             },
             windows::win32::gdi::{
                 EnumDisplayMonitors, ClientToScreen, ScreenToClient, CreateSolidBrush, GetDC, ReleaseDC,
@@ -48,14 +52,14 @@ fn main() -> () {
             windows::win32::menus_and_resources::{
                 LoadCursorW, GetSystemMenu, EnableMenuItem, CreatePopupMenu, DestroyMenu, AppendMenuW,
                 TrackPopupMenuEx, InsertMenuItemW, RemoveMenu, SetMenuItemInfoW, SetMenuInfo, GetMenuInfo,
-                GetMenuItemInfoW, GetCursorPos,
+                GetMenuItemInfoW, GetCursorPos, EndMenu, GetSubMenu, GetMenuItemCount, HiliteMenuItem,
             },
             windows::win32::keyboard_and_mouse_input::{
                 SetFocus, EnableWindow, IsWindowEnabled, SetActiveWindow, ReleaseCapture, SetCapture,
-                GetCapture, GetAsyncKeyState,
+                GetCapture, GetAsyncKeyState, GetKeyboardState, GetKeyState, TrackMouseEvent,
             },
             windows::win32::debug::{
-                IsDebuggerPresent, FlashWindowEx, GetLastError, FormatMessageW
+                IsDebuggerPresent, FlashWindowEx, GetLastError, FormatMessageW,
             },
             windows::win32::dwm:: {
                 DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DwmFlush,
@@ -69,6 +73,7 @@ fn main() -> () {
                 DefWindowProcW, SetWindowLongW, GetWindowLongW, ShowWindow, SetProcessDPIAware,
                 SetWindowPos, GetWindowRect, GetClientRect, SetParent, GetParent, MoveWindow, SetForegroundWindow,
                 SetTimer, SetWindowsHookExW, UnhookWindowsHookEx, CallNextHookEx, FindWindowW,
+                GetGUIThreadInfo, WindowFromPoint,
                 // Structures
                 CREATESTRUCTW, MSG, WINDOWPOS, NCCALCSIZE_PARAMS
             },

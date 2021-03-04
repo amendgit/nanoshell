@@ -7,6 +7,7 @@ pub enum Error {
     InvalidEngineHandle,
     Platform(PlatformError),
     Value(ValueError),
+    InvalidMenuHandle,
 }
 
 impl Display for Error {
@@ -17,6 +18,9 @@ impl Display for Error {
                 write!(f, "Provided handle does not match any engine")
             }
             Error::Value(error) => Display::fmt(error, f),
+            Error::InvalidMenuHandle => {
+                write!(f, "Provided menu handle does not match any known menu")
+            }
         }
     }
 }

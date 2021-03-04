@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:nanoshell/src/key_interceptor.dart';
 
 import 'constants.dart';
 import 'drag_drop.dart';
@@ -17,6 +18,7 @@ class WindowManager {
 
   Future<void> _init() async {
     WidgetsFlutterBinding.ensureInitialized();
+    KeyInterceptor.instance;
     final dispatcher = WindowMethodDispatcher.instance;
     final result = await dispatcher.invokeMethod(
         channel: Channels.windowManager,

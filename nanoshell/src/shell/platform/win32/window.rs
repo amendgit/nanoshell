@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, Ref, RefCell},
+    ptr::null_mut,
     rc::{Rc, Weak},
     time::Duration,
 };
@@ -8,7 +9,7 @@ use crate::{
     codec::Value,
     shell::{
         Context, DragEffect, DragRequest, IPoint, PlatformWindowDelegate, Point, PopupMenuRequest,
-        WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        PopupMenuResponse, WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
     },
     util::LateRefCell,
 };
@@ -187,10 +188,6 @@ impl WindowMenuDelegate for PlatformWindow {
     fn get_state(&self) -> Ref<WindowBaseState> {
         self.state.borrow()
     }
-
-    fn synthetize_mouse_up(&self) {
-        self.synthetize_mouse_up();
-    }
 }
 
 impl PlatformWindow {
@@ -333,9 +330,13 @@ impl PlatformWindow {
 
     pub fn show_popup_menu<F>(&self, menu: Rc<PlatformMenu>, request: PopupMenuRequest, on_done: F)
     where
-        F: FnOnce(PlatformResult<()>) -> () + 'static,
+        F: FnOnce(PlatformResult<PopupMenuResponse>) -> () + 'static,
     {
         let weak = self.weak_self.clone_value();
+
+        unsafe {
+            EndMenu();
+        }
 
         self.context
             .run_loop
@@ -350,6 +351,41 @@ impl PlatformWindow {
                 Duration::from_secs(0),
             )
             .detach();
+    }
+
+    pub fn hide_popup_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        self.window_menu.borrow().hide_popup(menu);
+        Ok(())
+    }
+
+    pub fn show_system_menu(&self) -> PlatformResult<()> {
+        let menu = unsafe { GetSystemMenu(self.hwnd(), FALSE) };
+        let position = self.get_state().local_to_global(&Point::xy(0.0, 0.0));
+        let hwnd = self.hwnd();
+        self.context
+            .run_loop
+            .borrow()
+            .schedule(
+                move || unsafe {
+                    let cmd = TrackPopupMenuEx(
+                        menu,
+                        TPM_RETURNCMD as u32,
+                        position.x,
+                        position.y,
+                        hwnd,
+                        null_mut(),
+                    );
+                    SendMessageW(
+                        hwnd,
+                        WM_SYSCOMMAND as u32,
+                        WPARAM(cmd.0 as usize),
+                        LPARAM(0),
+                    );
+                },
+                Duration::from_secs(0),
+            )
+            .detach();
+        Ok(())
     }
 
     pub fn begin_drag_session(&self, request: DragRequest) -> PlatformResult<()> {

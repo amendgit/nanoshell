@@ -97,6 +97,25 @@ pub struct PopupMenuRequest {
     // Windows only, used for menu bar implementation; is specified this
     // rect will keep receiving mouse events
     pub tracking_rect: Option<Rect>,
+
+    // Windows only, menu will not obscure the specified rect
+    pub item_rect: Option<Rect>,
+
+    // Windows only, first item will be pre-selected; Use during keyboard navigation
+    // in menubar
+    pub preselect_first: bool,
+}
+
+#[derive(serde::Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PopupMenuResponse {
+    pub item_selected: bool,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct HidePopupMenuRequest {
+    pub handle: MenuHandle,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

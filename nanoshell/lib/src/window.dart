@@ -82,17 +82,11 @@ class Window {
     return _invokeMethod(Methods.windowSetStyle, style.serialize());
   }
 
-  static LocalWindow of(BuildContext context) {
-    return context
-        .dependOnInheritedWidgetOfExactType<LocalWindowWidget>()!
-        .window;
-  }
+  static LocalWindow of(BuildContext context) =>
+      WindowContext.of(context).window;
 
-  static LocalWindow? maybeOf(BuildContext context) {
-    return context
-        .dependOnInheritedWidgetOfExactType<LocalWindowWidget>()
-        ?.window;
-  }
+  static LocalWindow? maybeOf(BuildContext context) =>
+      WindowContext.maybeoOf(context)?.window;
 
   static Window? fromHandle(WindowHandle handle) {
     return WindowManager.instance.getWindow(handle);
@@ -173,16 +167,32 @@ class LocalWindow extends Window {
     await _invokeMethod(Methods.windowReadyToShow);
   }
 
-  Future<void> showPopupMenu(
+  Future<PopupMenuResponse> showPopupMenu(
     MenuHandle handle,
     Offset globalPosition, {
     Rect? trackingRect,
+    Rect? itemRect,
+    bool preselectFirst: false,
   }) async {
-    await _invokeMethod(Methods.windowShowPopupMenu, {
-      'handle': handle.value,
-      'position': globalPosition.serialize(),
-      'trackingRect': trackingRect?.serialize(),
-    });
+    final value = await _invokeMethod(
+        Methods.windowShowPopupMenu,
+        PopupMenuRequest(
+                handle: handle,
+                position: globalPosition,
+                trackingRect: trackingRect,
+                itemRect: itemRect,
+                preselectFirst: preselectFirst)
+            .serialize());
+    return PopupMenuResponse.deserialize(value);
+  }
+
+  Future<void> hidePopupMenu(MenuHandle handle) async {
+    await _invokeMethod(Methods.windowHidePopupMenu,
+        HidePopupMenuRequest(handle: handle).serialize());
+  }
+
+  Future<void> showSystemMenu() async {
+    await _invokeMethod(Methods.windowShowSystemMenu);
   }
 
   Future<void> performDrag() async {

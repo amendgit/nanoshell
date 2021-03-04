@@ -25,7 +25,7 @@ impl PlatformMenu {
             let mut info = MENUINFO {
                 cb_size: std::mem::size_of::<MENUINFO>() as u32,
                 f_mask: (MIM_MENUDATA | MIM_STYLE) as u32,
-                dw_style: MNS_NOTIFYBYPOS as u32,
+                dw_style: 0,
                 cy_max: 0,
                 hbr_back: HBRUSH(0),
                 dw_context_help_id: 0,
@@ -143,26 +143,6 @@ impl PlatformMenu {
 
     fn can_update(_old_item: &MenuItem, _new_item: &MenuItem) -> bool {
         true
-    }
-
-    pub(super) fn on_menu_command(context: Rc<Context>, menu: HMENU, index: usize) {
-        let mut info: MENUINFO = Default::default();
-        info.cb_size = std::mem::size_of::<MENUINFO>() as u32;
-        info.f_mask = MIM_MENUDATA;
-        unsafe {
-            if GetMenuInfo(menu, &mut info as *mut _) == TRUE {
-                let handle = MenuHandle(info.dw_menu_data as i64);
-                let mut item_info: MENUITEMINFOW = Default::default();
-                item_info.cb_size = std::mem::size_of::<MENUITEMINFOW>() as u32;
-                item_info.f_mask = MIIM_ID as u32;
-                if GetMenuItemInfoW(menu, index as u32, TRUE, &mut item_info as *mut _) == TRUE {
-                    context
-                        .menu_manager
-                        .borrow()
-                        .on_menu_action(handle, item_info.w_id as i64);
-                }
-            }
-        }
     }
 }
 

@@ -1,9 +1,9 @@
 class Channels {
-  static final dispatcher = '.window.dispatcher';
+  static final dispatcher = 'nanoshell/window.dispatcher';
   static final windowManager = '.window.window-manager';
   static final dropTarget = '.window.drop-target';
   static final dragSource = '.window.drag-source';
-  static final menuManager = '.menu-manager';
+  static final menuManager = 'nanoshell/menu-manager';
 }
 
 class Events {
@@ -32,6 +32,8 @@ class Methods {
   static final windowPerformDrag = 'method:window-perform-window-drag';
 
   static final windowShowPopupMenu = 'method:window-show-popup-menu';
+  static final windowHidePopupMenu = 'method:window-hide-popup-menu';
+  static final windowShowSystemMenu = 'method:window-show-system-menu';
 
   // Drop Target
   static final dropTargetDraggingUpdated =

@@ -1,9 +1,11 @@
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Cell, Ref, RefCell, RefMut},
+    mem::size_of,
     rc::{Rc, Weak},
+    time::Duration,
 };
 
-use crate::shell::{Context, IPoint, IRect, PopupMenuRequest};
+use crate::shell::{Context, IPoint, IRect, PopupMenuRequest, PopupMenuResponse};
 
 use super::{
     all_bindings::*,
@@ -15,8 +17,6 @@ use super::{
 
 pub trait WindowMenuDelegate {
     fn get_state<'a>(&'a self) -> Ref<'a, WindowBaseState>;
-
-    fn synthetize_mouse_up(&self);
 }
 
 pub struct WindowMenu {
@@ -42,6 +42,15 @@ struct MenuState {
 
     // after pressing right move to next menu in menubar
     current_item_is_last: bool,
+
+    seen_key_down: bool,
+    seen_mouse_down: bool,
+
+    menu_hwnd: HWND,
+}
+
+thread_local! {
+    static POPUP_PARENT: Cell<HWND> = Cell::new(HWND(0));
 }
 
 // Support mouse tracking while popup menu is visible
@@ -69,9 +78,19 @@ impl WindowMenu {
         self.delegate.as_ref().and_then(|d| d.upgrade()).unwrap()
     }
 
+    pub fn hide_popup(&self, menu: Rc<PlatformMenu>) {
+        if let Some(current_menu) = self.current_menu.borrow().as_ref() {
+            if current_menu.platform_menu.handle == menu.handle {
+                unsafe {
+                    EndMenu();
+                }
+            }
+        }
+    }
+
     pub fn show_popup<F>(&self, menu: Rc<PlatformMenu>, request: PopupMenuRequest, on_done: F)
     where
-        F: FnOnce(PlatformResult<()>) -> () + 'static,
+        F: FnOnce(PlatformResult<PopupMenuResponse>) -> () + 'static,
     {
         // We need hook for the tracking rect (if set), but also to forward mouse up
         // because popup menu eats the mouse up message
@@ -91,9 +110,10 @@ impl WindowMenu {
             // starting with no item selected, moving left/right moves to next/prev item in menubar
             current_item_is_first: true,
             current_item_is_last: true,
+            seen_key_down: false,
+            seen_mouse_down: false,
+            menu_hwnd: HWND(0),
         });
-
-        self.delegate().synthetize_mouse_up();
 
         let position = self
             .delegate()
@@ -101,29 +121,83 @@ impl WindowMenu {
             .local_to_global(&request.position);
 
         // with popup menu active, the TrackMouseLeaveEvent in flutter view will be fired on every
-        // mouse move; we block this in subclass, only allowing our wM_MOUSELEAVE message synthetized
+        // mouse move; we block this in subclass, only allowing our WM_MOUSELEAVE message synthetized
         // when leaving tracking rect
         self.mouse_state.borrow_mut().ignore_mouse_leave = true;
 
-        unsafe {
-            TrackPopupMenuEx(
+        let mut params = {
+            if let Some(item_rect) = request.item_rect.as_ref() {
+                let top_left = self
+                    .delegate()
+                    .get_state()
+                    .local_to_global(&item_rect.top_left());
+
+                let bottom_right = self
+                    .delegate()
+                    .get_state()
+                    .local_to_global(&item_rect.bottom_right());
+
+                Some(TPMPARAMS {
+                    cb_size: size_of::<TPMPARAMS>() as u32,
+                    rc_exclude: RECT {
+                        left: top_left.x,
+                        top: top_left.y,
+                        right: bottom_right.x,
+                        bottom: bottom_right.y,
+                    },
+                })
+            } else {
+                None
+            }
+        };
+
+        POPUP_PARENT.with(|parent| {
+            parent.set(self.hwnd);
+        });
+
+        let res = unsafe {
+            let res = TrackPopupMenuEx(
                 menu.menu,
-                0,
+                (TPM_LEFTALIGN | TPM_TOPALIGN | TPM_VERTICAL | TPM_RETURNCMD) as u32,
                 position.x,
                 position.y,
                 self.hwnd,
-                std::ptr::null_mut(),
+                match &mut params {
+                    Some(params) => params as *mut _,
+                    None => std::ptr::null_mut(),
+                },
             );
 
             UnhookWindowsHookEx(hook);
+
+            // hook swallows WM_MOUSELEAVE for flutter view (because it is being fired)
+            // repeatedy with popup menu visible, so we need to ensure that there's
+            // mouse leave hook in palce
+            self.track_mouse_leave();
+
+            res.0
+        };
+
+        POPUP_PARENT.with(|parent| {
+            parent.set(HWND(0));
+        });
+
+        if res > 0 {
+            self.context.menu_manager.borrow().on_menu_action(
+                self.current_menu.borrow().as_ref().unwrap().request.handle,
+                res as i64,
+            );
         }
 
         self.current_menu.borrow_mut().take();
         self.mouse_state.borrow_mut().ignore_mouse_leave = false;
-        on_done(Ok(()));
+        on_done(Ok(PopupMenuResponse {
+            item_selected: res != 0,
+        }));
     }
 
     const WM_MENU_HOOK: i32 = WM_USER;
+    const WM_MENU_HWND: i32 = WM_USER + 1; // WPARAM contains menu HWND
 
     extern "system" fn hook_proc(code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
         unsafe {
@@ -136,6 +210,18 @@ impl WindowMenu {
                 if parent.0 == 0 {
                     parent = msg.hwnd;
                 }
+
+                if msg.message == WM_PAINT as u32 {
+                    POPUP_PARENT.with(|parent| {
+                        SendMessageW(
+                            parent.get(),
+                            Self::WM_MENU_HWND as u32,
+                            WPARAM(msg.hwnd.0 as usize),
+                            LPARAM(0),
+                        );
+                    });
+                }
+
                 SendMessageW(parent, Self::WM_MENU_HOOK as u32, w_param, l_param);
             }
             CallNextHookEx(0, code, w_param, l_param)
@@ -157,19 +243,93 @@ impl WindowMenu {
         None
     }
 
-    pub fn on_menu_hook(&self, mut msg: MSG) {
+    unsafe fn preselect_first_enabled_item(menu_hwnd: HWND, menu: HMENU) {
+        for i in 0..GetMenuItemCount(menu) {
+            SendMessageW(
+                menu_hwnd,
+                WM_KEYDOWN as u32,
+                WPARAM(VK_DOWN as usize),
+                LPARAM(0),
+            );
+            let mut item_info: MENUITEMINFOW = Default::default();
+            item_info.cb_size = std::mem::size_of::<MENUITEMINFOW>() as u32;
+            item_info.f_mask = MIIM_STATE as u32;
+            GetMenuItemInfoW(menu, i as u32, TRUE, &mut item_info as *mut _);
+            if item_info.f_state & MF_DISABLED as u32 == 0 {
+                break;
+            }
+        }
+    }
+
+    fn on_menu_hwnd(&self, menu_hwnd: HWND) {
+        let mut menu = self.current_menu.borrow_mut();
+        let menu = menu.as_mut();
+        if let Some(menu) = menu {
+            menu.menu_hwnd = menu_hwnd;
+            if menu.request.preselect_first {
+                let hmenu = menu.platform_menu.menu;
+                self.context
+                    .run_loop
+                    .borrow()
+                    .schedule(
+                        move || unsafe {
+                            Self::preselect_first_enabled_item(menu_hwnd, hmenu);
+                        },
+                        Duration::from_secs(0),
+                    )
+                    .detach();
+            }
+        }
+    }
+
+    fn on_menu_hook(&self, mut msg: MSG) {
         if self.current_menu.borrow().is_none() {
             return;
         }
 
         let message = msg.message as i32;
 
+        let mut current_menu = RefMut::map(self.current_menu.borrow_mut(), |x| x.as_mut().unwrap());
+
+        if message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN {
+            current_menu.seen_mouse_down = true;
+        }
+
+        if message == WM_KEYDOWN {
+            current_menu.seen_key_down = true;
+        }
+
+        // Forward initial up button and key up to flutter window; Otherwise menu eats the event
+        // and flutter keybord / mouse state gets inconsistent
+
+        if (message == WM_LBUTTONUP || message == WM_RBUTTONUP) && !current_menu.seen_mouse_down {
+            unsafe {
+                SendMessageW(self.child_hwnd, msg.message, msg.w_param, msg.l_param);
+            }
+        }
+
+        if (message == WM_KEYUP || message == WM_SYSKEYUP) && !current_menu.seen_key_down {
+            unsafe {
+                SendMessageW(self.child_hwnd, WM_KEYUP as u32, msg.w_param, msg.l_param);
+            }
+        }
+
         // mouse global to local coordinates for mouse messages
         if message >= WM_MOUSEFIRST && message <= WM_MOUSELAST {
-            let mut current_menu =
-                RefMut::map(self.current_menu.borrow_mut(), |x| x.as_mut().unwrap());
-
             let point = IPoint::xy(GET_X_LPARAM(msg.l_param), GET_Y_LPARAM(msg.l_param));
+
+            // FIXME(knopp): is this necesary?
+            // let hwnd = unsafe {
+            //     WindowFromPoint(POINT {
+            //         x: point.x,
+            //         y: point.y,
+            //     })
+            // };
+            // only forward mouse events when over flutter view
+            // if hwnd != self.child_hwnd {
+            //     return;
+            // }
+
             let point = self.delegate().get_state().global_to_local_physical(&point);
             msg.l_param = LPARAM(MAKELONG(point.x as u16, point.y as u16) as isize);
 
@@ -178,21 +338,17 @@ impl WindowMenu {
                     .scaled(self.delegate().get_state().get_scaling_factor())
                     .into();
                 if scaled.is_inside(&point) {
-                    current_menu.mouse_in = true;
+                    if !current_menu.mouse_in {
+                        current_menu.mouse_in = true;
+                    }
                     unsafe {
                         SendMessageW(self.child_hwnd, msg.message, msg.w_param, msg.l_param);
                     }
-                } else if current_menu.mouse_in {
-                    current_menu.mouse_in = false;
-                    self.mouse_state.borrow_mut().ignore_mouse_leave = false;
-                    unsafe {
-                        SendMessageW(self.child_hwnd, WM_MOUSELEAVE as u32, WPARAM(1), LPARAM(0));
-                    }
-                    self.mouse_state.borrow_mut().ignore_mouse_leave = true;
+                } else {
+                    self.send_mouse_leave(&mut current_menu);
                 }
             }
         } else if message == WM_KEYDOWN {
-            let current_menu = Ref::map(self.current_menu.borrow(), |x| x.as_ref().unwrap());
             let key = msg.w_param.0 as i32;
 
             let (key_prev, key_next) = match self.delegate().get_state().is_rtl() {
@@ -214,6 +370,40 @@ impl WindowMenu {
         }
     }
 
+    fn send_mouse_leave(&self, current_menu: &mut RefMut<MenuState>) {
+        if current_menu.mouse_in {
+            current_menu.mouse_in = false;
+            self.mouse_state.borrow_mut().ignore_mouse_leave = false;
+            unsafe {
+                SendMessageW(self.child_hwnd, WM_MOUSELEAVE as u32, WPARAM(1), LPARAM(0));
+            }
+            self.mouse_state.borrow_mut().ignore_mouse_leave = true;
+        }
+    }
+
+    unsafe fn track_mouse_leave(&self) {
+        let hwnd = self.child_hwnd;
+        self.context
+            .run_loop
+            .borrow()
+            .schedule(
+                move || {
+                    let mut event = TRACKMOUSEEVENT {
+                        cb_size: size_of::<TRACKMOUSEEVENT>() as u32,
+                        dw_flags: TME_LEAVE as u32,
+                        hwnd_track: hwnd,
+                        dw_hover_time: 0,
+                    };
+                    TrackMouseEvent(&mut event as *mut _);
+                },
+                // this needs to be delayed a bit, if we schedule it immediately after
+                // hiding popup menu windows will fire WM_MOUSELEAVE even if cursor
+                // is within child_hwnd.
+                Duration::from_millis(50),
+            )
+            .detach();
+    }
+
     pub fn on_menu_select(&self, _msg: u32, w_param: WPARAM, l_param: LPARAM) {
         if self.current_menu.borrow().is_none() {
             return;
@@ -225,7 +415,11 @@ impl WindowMenu {
         let flags = HIWORD(w_param.0 as u32) as i32;
 
         current_menu.current_item_is_first = menu == current_menu.platform_menu.menu;
-        current_menu.current_item_is_last = flags & MF_POPUP == 0;
+
+        // Mimic behavior of windows menubar; element either has no menu, or it is mouse selected
+        // but not highlighted (through keyboard focus)
+        current_menu.current_item_is_last =
+            flags & MF_POPUP == 0 || flags & MF_MOUSESELECT == MF_MOUSESELECT;
     }
 
     pub fn handle_message(
@@ -236,9 +430,6 @@ impl WindowMenu {
         l_param: LPARAM,
     ) -> Option<LRESULT> {
         match msg as i32 {
-            WM_MENUCOMMAND => {
-                PlatformMenu::on_menu_command(self.context.clone(), HMENU(l_param.0), w_param.0);
-            }
             WM_MENUSELECT => {
                 self.on_menu_select(msg, w_param, l_param);
             }
@@ -246,6 +437,9 @@ impl WindowMenu {
                 let ptr = l_param.0 as *const MSG;
                 let msg: &MSG = unsafe { &*ptr };
                 self.on_menu_hook(msg.clone());
+            }
+            Self::WM_MENU_HWND => {
+                self.on_menu_hwnd(HWND(w_param.0 as isize));
             }
             _ => {}
         }

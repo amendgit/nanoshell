@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:nanoshell/nanoshell.dart';
+import 'package:nanoshell_demo/menu_bar_window.dart';
 
 import 'drag_drop.dart';
 import 'modal.dart';
@@ -26,6 +27,9 @@ class MyApp extends StatelessWidget {
             child: WindowWidget(
               builder: (initData) {
                 WindowBuilder? builder;
+
+                // builder = MenuBarWindow();
+
                 builder ??= ModalWindowBuilder.fromInitData(initData);
                 builder ??= DragDropWindow.fromInitData(initData);
                 builder ??= HomeWindow();

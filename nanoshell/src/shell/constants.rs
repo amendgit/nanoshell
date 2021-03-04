@@ -1,7 +1,7 @@
 pub(crate) mod channel {
     // Flutter channel for windows bound messages; All messages that concern windows are
     // dispatched on this channel
-    pub const DISPATCHER: &str = ".window.dispatcher";
+    pub const DISPATCHER: &str = "nanoshell/window.dispatcher";
 
     // Window sub channels (delivered by dispatcher)
     pub mod win {
@@ -11,7 +11,7 @@ pub(crate) mod channel {
     }
 
     // Flutter channel for mananing platform menus
-    pub const MENU_MANAGER: &str = ".menu-manager";
+    pub const MENU_MANAGER: &str = "nanoshell/menu-manager";
 }
 
 pub(crate) mod method {
@@ -50,6 +50,8 @@ pub(crate) mod method {
         pub const PERFORM_WINDOW_DRAG: &str = "method:window-perform-window-drag";
 
         pub const SHOW_POPUP_MENU: &str = "method:window-show-popup-menu";
+        pub const HIDE_POPUP_MENU: &str = "method:window-hide-popup-menu";
+        pub const SHOW_SYSTEM_MENU: &str = "method:window-show-system-menu";
     }
 
     pub mod drop_target {

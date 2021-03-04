@@ -1,9 +1,8 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import 'menu_internal.dart';
 import 'mutex.dart';
-import 'constants.dart';
 
 class MenuItem {
   MenuItem({
@@ -55,6 +54,8 @@ class MenuItem {
   final bool separator;
   final bool checked;
 
+  bool get disabled => submenu == null && _action == null;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -82,7 +83,8 @@ class Menu {
   final bool _ephemeral;
   MenuBuilder builder;
 
-  Future<MenuHandle> materialize() async {
+  Future<MenuHandle> materialize([MenuMaterializer? materializer]) async {
+    _materializer = materializer;
     return _mutex.protect(() async {
       return _materializeLocked();
     });
@@ -100,55 +102,46 @@ class Menu {
     if (_currentHandle != null) {
       return _currentHandle!;
     } else {
-      for (final element in _currentElements) {
-        if (element.item.submenu != null) {
-          await element.item.submenu!._materializeSubmenu(this);
+      _materializer ??= DefaultMaterializer();
+
+      final childMaterializer = _materializer!.createChildMaterializer();
+      if (childMaterializer != null) {
+        for (final element in _currentElements) {
+          if (element.item.submenu != null) {
+            await element.item.submenu!
+                ._materializeSubmenu(this, childMaterializer);
+          }
         }
       }
 
-      return _updatePlatformMenu();
+      _currentHandle =
+          await _materializer!.createOrUpdateMenu(this, _currentElements);
+      return _currentHandle!;
     }
   }
 
-  Future<void> _materializeSubmenu(Menu parent) async {
+  Future<void> _materializeSubmenu(
+      Menu parent, MenuMaterializer materializer) async {
     assert(_materializeParent == null || identical(_materializeParent, parent),
         'Menu can not be moved to another parent while materialized');
     _materializeParent = parent;
+    _materializer = materializer;
     await _materializeLocked();
   }
 
   Menu? _materializeParent;
-
-  Future<MenuHandle> _updatePlatformMenu() async {
-    final serialized = {
-      'items': _currentElements.map((e) => e.serialize()).toList()
-    };
-
-    final res = MenuHandle(
-        await _MenuManager.instance().invoke(Methods.menuCreateOrUpdate, {
-      'handle': _currentHandle?.value,
-      'menu': serialized,
-    }));
-    if (_currentHandle != null && _currentHandle != res) {
-      _MenuManager.instance()._activeMenus.remove(_currentHandle);
-    }
-    _currentHandle = res;
-    _MenuManager.instance()._activeMenus[res] = this;
-    return res;
-  }
+  MenuMaterializer? _materializer;
 
   Future<void> _unmaterializeLocked() async {
-    if (_currentHandle != null) {
+    if (_currentHandle != null && _materializer != null) {
       for (final element in _currentElements) {
-        if (element.item.submenu != null) {
+        if (element.item.submenu?._materializeParent == this) {
           await element.item.submenu!._unmaterializeLocked();
         }
       }
       _materializeParent = null;
-      await _MenuManager.instance().invoke(Methods.menuDestroy, {
-        'handle': _currentHandle?.value,
-      });
-      _MenuManager.instance()._activeMenus.remove(_currentHandle!);
+      await _materializer!.destroyMenu(_currentHandle!);
+      _materializer = null;
       _currentHandle = null;
     }
     _pastActions.clear();
@@ -158,7 +151,13 @@ class Menu {
     final removed = <Menu>[];
     final preserved = <Menu>[];
     final added = <Menu>[];
+
+    if (_materializer == null) {
+      return;
+    }
+
     _currentElements = _mergeElements(builder(), removed, preserved, added);
+
     for (final menu in preserved) {
       await menu._updateLocked();
     }
@@ -172,17 +171,30 @@ class Menu {
         }
       }
     }
-    if (_currentHandle != null) {
-      await _updatePlatformMenu();
+    if (_currentHandle != null && _materializer != null) {
+      _currentHandle =
+          await _materializer!.createOrUpdateMenu(this, _currentElements);
     }
   }
 
-  void _onAction(int itemId) {
+  bool _onAction(int itemId) {
     for (final e in _currentElements) {
       if (e.id == itemId && e.item.action != null) {
         e.item.action!();
-        return;
+        return true;
       }
+    }
+    for (final e in _currentElements) {
+      if (e.item.submenu != null && e.item.submenu!._onAction(itemId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void onAction(int itemId) {
+    if (_onAction(itemId)) {
+      return;
     }
     final pastAction = _pastActions[itemId];
     if (pastAction != null) {
@@ -190,18 +202,20 @@ class Menu {
     }
   }
 
-  List<_MenuElement> _currentElements = [];
+  List<MenuElement> _currentElements = [];
 
   // temporarily save action for removed item; this is to ensure that
   // when item is removed right after user selects it, we can still deliver the
   // callback
   final _pastActions = <int, VoidCallback>{};
 
+  MenuHandle? get currentHandle => _currentHandle;
+
   MenuHandle? _currentHandle;
 
-  List<_MenuElement> _mergeElements(List<MenuItem> items, List<Menu> outRemoved,
+  List<MenuElement> _mergeElements(List<MenuItem> items, List<Menu> outRemoved,
       List<Menu> outPreserved, List<Menu> outAdded) {
-    final res = <_MenuElement>[];
+    final res = <MenuElement>[];
 
     _pastActions.clear();
 
@@ -214,7 +228,7 @@ class Menu {
         _currentElements.where((element) => element.item.separator).toList();
 
     for (final i in items) {
-      _MenuElement? existing;
+      MenuElement? existing;
       if (i.separator) {
         if (currentSeparators.isNotEmpty) {
           existing = currentSeparators.removeAt(0);
@@ -242,7 +256,7 @@ class Menu {
         if (i.submenu != null) {
           outAdded.add(i.submenu!);
         }
-        res.add(_MenuElement(id: _nextItemId++, item: i));
+        res.add(MenuElement(id: _nextItemId++, item: i));
       }
     }
 
@@ -296,57 +310,4 @@ class MenuHandle {
 
   @override
   String toString() => 'MenuHandle($value)';
-}
-
-class _MenuElement {
-  _MenuElement({
-    required this.id,
-    required this.item,
-  });
-
-  final int id;
-
-  final MenuItem item;
-
-  Map serialize() => {
-        'id': id,
-        'title': item.title,
-        'submenu': item.submenu?._currentHandle?.value,
-        'enabled': item.action != null || item.submenu != null,
-        'separator': item.separator,
-        'checked': item.checked,
-      };
-}
-
-final _menuChannel = MethodChannel(Channels.menuManager);
-
-class _MenuManager {
-  static _MenuManager instance() => _instance;
-
-  static final _instance = _MenuManager();
-
-  _MenuManager() {
-    _menuChannel.setMethodCallHandler(_onMethodCall);
-  }
-
-  Future<dynamic> invoke(String method, dynamic arg) {
-    return _menuChannel.invokeMethod(method, arg);
-  }
-
-  Future<dynamic> _onMethodCall(MethodCall call) async {
-    if (call.method == Methods.menuOnAction) {
-      final handle = MenuHandle(call.arguments['handle'] as int);
-      final id = call.arguments['id'] as int;
-      final menu = _activeMenus[handle];
-      if (menu != null) {
-        menu._onAction(id);
-      }
-    } else if (call.method == Methods.menubarMoveToPreviousMenu) {
-      print('Move to Previous Menu');
-    } else if (call.method == Methods.menubarMoveToNextMenu) {
-      print('Move to Next Menu');
-    }
-  }
-
-  final _activeMenus = <MenuHandle, Menu>{};
 }

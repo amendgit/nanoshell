@@ -96,4 +96,12 @@ impl PlatformWindow {
     {
         on_done(Err(PlatformError::NotImplemented))
     }
+
+    pub fn hide_popup_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        Err(PlatformError::NotImplemented)
+    }
+
+    pub fn show_system_menu(&self) -> PlatformResult<()> {
+        Err(PlatformError::NotImplemented);
+    }
 }

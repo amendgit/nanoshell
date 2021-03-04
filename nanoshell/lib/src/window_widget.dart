@@ -47,26 +47,32 @@ class WindowWidget extends StatefulWidget {
 
 enum _Status { notInitialized, initializing, initialized }
 
-class _WindowWidgetState extends State<WindowWidget> {
+class _WindowWidgetState extends State<WindowWidget> implements WindowContext {
   @override
   Widget build(BuildContext context) {
     _maybeInitialize();
     if (status == _Status.initialized) {
       final window = WindowManager.instance.currentWindow;
       final build = widget.builder(window.initData);
-      return LocalWindowWidget(
-        child: _WindowLayout(
-          builtWindow: build,
-          child: _WindowLayoutInner(
-            child: Builder(
-              builder: (context) {
-                return build.build(context);
-              },
+      return Listener(
+        onPointerDown: _onWindowTap,
+        child: Container(
+          color: Color(0),
+          child: _WindowContextWidget(
+            child: _WindowLayout(
+              builtWindow: build,
+              child: _WindowLayoutInner(
+                child: Builder(
+                  builder: (context) {
+                    return build.build(context);
+                  },
+                ),
+                builtWindow: build,
+              ),
             ),
-            builtWindow: build,
+            context: this,
           ),
         ),
-        window: window,
       );
     } else {
       return Container();
@@ -84,15 +90,58 @@ class _WindowWidgetState extends State<WindowWidget> {
 
   _Status status = _Status.notInitialized;
   dynamic initData;
+
+  @override
+  void registerTapCallback(ValueChanged<PointerDownEvent> cb) {
+    _tapCallbacks.add(cb);
+  }
+
+  @override
+  void unregisterTapCallback(ValueChanged<PointerDownEvent> cb) {
+    _tapCallbacks.remove(cb);
+  }
+
+  void _onWindowTap(PointerDownEvent e) {
+    for (final cb in List<ValueChanged<PointerDownEvent>>.from(_tapCallbacks)) {
+      if (_tapCallbacks.contains(cb)) {
+        cb(e);
+      }
+    }
+  }
+
+  @override
+  LocalWindow get window => WindowManager.instance.currentWindow;
+  final _tapCallbacks = <ValueChanged<PointerDownEvent>>[];
+}
+
+abstract class WindowContext {
+  LocalWindow get window;
+
+  void registerTapCallback(ValueChanged<PointerDownEvent> e);
+  void unregisterTapCallback(ValueChanged<PointerDownEvent> e);
+
+  static WindowContext of(BuildContext context) {
+    final res = context
+        .dependOnInheritedWidgetOfExactType<_WindowContextWidget>()
+        ?.context;
+    return res!;
+  }
+
+  static WindowContext? maybeoOf(BuildContext context) {
+    final res = context
+        .dependOnInheritedWidgetOfExactType<_WindowContextWidget>()
+        ?.context;
+    return res;
+  }
 }
 
 // Used by Window.of(context)
-class LocalWindowWidget extends InheritedWidget {
-  final LocalWindow window;
+class _WindowContextWidget extends InheritedWidget {
+  final WindowContext context;
 
-  LocalWindowWidget({
+  _WindowContextWidget({
     required Widget child,
-    required this.window,
+    required this.context,
   }) : super(child: child);
 
   @override
@@ -188,6 +237,15 @@ class _RenderWindowLayout extends RenderProxyBox {
 
   @override
   void performLayout() {
+    if (builtWindow.autoSizeWindow) {
+      final constraints =
+          BoxConstraints.loose(Size(double.infinity, double.infinity));
+      child!.layout(constraints, parentUsesSize: true);
+      size = Size(this.constraints.maxWidth, this.constraints.maxHeight);
+    } else {
+      super.performLayout();
+    }
+
     if (!hasLayout) {
       hasLayout = true;
 
@@ -196,20 +254,12 @@ class _RenderWindowLayout extends RenderProxyBox {
         SchedulerBinding.instance!.addPostFrameCallback((timeStamp) async {
           final w = child!.getMaxIntrinsicWidth(double.infinity);
           final h = child!.getMaxIntrinsicHeight(double.infinity);
+
           await builtWindow.initializeWindow(
               win, _snapToPixelBoundary(Size(w, h)));
           await win.readyToShow();
         });
       });
-    }
-
-    if (builtWindow.autoSizeWindow) {
-      final constraints =
-          BoxConstraints.loose(Size(double.infinity, double.infinity));
-      child!.layout(constraints, parentUsesSize: true);
-      size = Size(this.constraints.maxWidth, this.constraints.maxHeight);
-    } else {
-      super.performLayout();
     }
   }
 

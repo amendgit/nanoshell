@@ -9,14 +9,14 @@ use crate::{
         Value,
     },
     util::{LateRefCell, OkLog},
-    Result,
+    Error, Result,
 };
 
 use super::{
     constants::*, platform::window::PlatformWindow, Context, DragEffect, DragRequest, DragResult,
-    DraggingInfo, EngineHandle, PopupMenuRequest, WindowGeometry, WindowGeometryFlags,
-    WindowGeometryRequest, WindowMethodCallReply, WindowMethodCallResult, WindowMethodInvoker,
-    WindowStyle,
+    DraggingInfo, EngineHandle, HidePopupMenuRequest, PopupMenuRequest, PopupMenuResponse,
+    WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowMethodCallReply,
+    WindowMethodCallResult, WindowMethodInvoker, WindowStyle,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Copy, Clone, Hash, Eq, PartialEq)]
@@ -162,17 +162,37 @@ impl Window {
 
     fn show_popup_menu<F>(&self, request: PopupMenuRequest, on_done: F)
     where
-        F: FnOnce(Result<()>) -> () + 'static,
+        F: FnOnce(Result<PopupMenuResponse>) -> () + 'static,
     {
-        self.platform_window().show_popup_menu(
-            self.context
-                .menu_manager
-                .borrow()
-                .get_platform_menu(request.handle)
-                .unwrap(),
-            request,
-            |r| on_done(r.map_err(|e| e.into())),
-        )
+        let menu = self
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu(request.handle);
+        match menu {
+            Some(menu) => self
+                .platform_window()
+                .show_popup_menu(menu, request, |r| on_done(r.map_err(|e| e.into()))),
+            None => on_done(Err(Error::InvalidMenuHandle)),
+        }
+    }
+
+    fn hide_popup_menu(&self, request: HidePopupMenuRequest) -> Result<()> {
+        let menu = self
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu(request.handle)
+            .ok_or(Error::InvalidMenuHandle)?;
+        self.platform_window()
+            .hide_popup_menu(menu)
+            .map_err(|e| e.into())
+    }
+
+    fn show_system_menu(&self) -> Result<()> {
+        self.platform_window()
+            .show_system_menu()
+            .map_err(|e| e.into())
     }
 
     fn map_result<T>(result: Result<T>) -> WindowMethodCallResult
@@ -247,6 +267,12 @@ impl Window {
                     }
                     Err(err) => return reply.send(Self::map_result::<()>(Err(err.into()))),
                 }
+            }
+            method::window::HIDE_POPUP_MENU => {
+                return Self::reply(reply, &arg, |req| self.hide_popup_menu(req));
+            }
+            method::window::SHOW_SYSTEM_MENU => {
+                return Self::reply(reply, &arg, |()| self.show_system_menu());
             }
             method::drag_source::BEGIN_DRAG_SESSION => {
                 return Self::reply(reply, &arg, |request| self.begin_drag_session(request));
