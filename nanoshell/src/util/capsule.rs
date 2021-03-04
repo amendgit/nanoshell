@@ -70,7 +70,12 @@ impl<T> Drop for Capsule<T> {
         if self.value.is_some() && self.thread_id != thread::current().id() {
             if let Some(sender) = self.sender.as_ref() {
                 let carry = Carry(self.value.take().unwrap());
+                let thread_id = self.thread_id;
                 sender.send(move || {
+                    // make sure that sender sent us back to initial thread
+                    if thread_id != thread::current().id() {
+                        panic!("Capsule was created on different thread than sender target")
+                    }
                     let _ = carry;
                 });
             } else if !thread::panicking() {
