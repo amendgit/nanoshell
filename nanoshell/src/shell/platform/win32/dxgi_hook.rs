@@ -392,7 +392,10 @@ fn get_module_symbol_address(module: &str, symbol: &str) -> Option<usize> {
     let module = to_utf16(module);
     let symbol = CString::new(symbol).unwrap();
     unsafe {
-        let handle = LoadLibraryW(module.as_ptr());
+        let mut handle = GetModuleHandleW(module.as_ptr());
+        if handle == 0 {
+            handle = LoadLibraryW(module.as_ptr());
+        }
         GetProcAddress(handle, symbol.as_ptr()).map(|addr| addr as usize)
     }
 }
