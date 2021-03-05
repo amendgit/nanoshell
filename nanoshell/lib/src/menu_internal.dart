@@ -35,8 +35,11 @@ class MenuElement {
 }
 
 abstract class MenuMaterializer {
-  FutureOr<MenuHandle> createOrUpdateMenu(
+  FutureOr<MenuHandle?> createOrUpdateMenuPre(
       Menu menu, List<MenuElement> elements);
+
+  FutureOr<MenuHandle> createOrUpdateMenuPost(
+      Menu menu, List<MenuElement> elements, MenuHandle? handle);
 
   Future<void> destroyMenu(MenuHandle menu);
 
@@ -45,8 +48,14 @@ abstract class MenuMaterializer {
 
 class DefaultMaterializer extends MenuMaterializer {
   @override
-  FutureOr<MenuHandle> createOrUpdateMenu(
-      Menu menu, List<MenuElement> elements) async {
+  FutureOr<MenuHandle?> createOrUpdateMenuPre(
+      Menu menu, List<MenuElement> elements) {
+    return null;
+  }
+
+  @override
+  FutureOr<MenuHandle> createOrUpdateMenuPost(
+      Menu menu, List<MenuElement> elements, MenuHandle? handle) async {
     final serialized = {
       'title': menu.title,
       'role': menu.role != null ? enumToString(menu.role!) : null,

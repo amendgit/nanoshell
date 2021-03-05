@@ -126,21 +126,22 @@ class Menu {
   final String title;
   MenuBuilder builder;
 
-  static final _mutex = Mutex();
+  static final mutex = Mutex();
 
   Future<T> materialize<T>(Future<T> Function(MenuHandle) callback,
       [MenuMaterializer? materializer]) async {
-    _materializer = materializer;
-    final handle = await _mutex.protect(() async {
+    final handle = await mutex.protect(() async {
+      _materializer = materializer;
       return _materializeLocked();
     });
     final res = await callback(handle);
-    await _mutex.protect(() => _unmaterializeLocked());
+    await mutex.protect(() => _unmaterializeLocked());
     return res;
   }
 
   Future<void> update() async {
-    return _mutex.protect(() => _updateLocked());
+    final res = mutex.protect(() => _updateLocked());
+    return res;
   }
 
   // fired when replacing app menu; used to release handle in materialize
@@ -181,6 +182,9 @@ class Menu {
 
       _materializer ??= DefaultMaterializer();
 
+      final handle =
+          await _materializer!.createOrUpdateMenuPre(this, _currentElements);
+
       final childMaterializer = _materializer!.createChildMaterializer();
       if (childMaterializer != null) {
         for (final element in _currentElements) {
@@ -191,15 +195,17 @@ class Menu {
         }
       }
 
-      _currentHandle =
-          await _materializer!.createOrUpdateMenu(this, _currentElements);
+      _currentHandle = await _materializer!
+          .createOrUpdateMenuPost(this, _currentElements, handle);
       return _currentHandle!;
     }
   }
 
   Future<void> _materializeSubmenu(
       Menu parent, MenuMaterializer materializer) async {
-    assert(_materializeParent == null || identical(_materializeParent, parent),
+    assert(
+        _materializeParent == null ||
+            identical(_materializeParent!._transferTarget, parent),
         'Menu can not be moved to another parent while materialized');
     _materializeParent = parent;
     _materializer = materializer;
@@ -209,7 +215,12 @@ class Menu {
   Menu? _materializeParent;
   MenuMaterializer? _materializer;
 
-  Future<void> _unmaterializeLocked() async {
+  Future<void> _unmaterializeLocked() {
+    return _transferTarget._doUnmaterialize();
+  }
+
+  Future<void> _doUnmaterialize() async {
+    assert(_currentHandle != null && _materializer != null);
     if (_currentHandle != null && _materializer != null) {
       for (final element in _currentElements) {
         if (element.item.submenu?._materializeParent == this) {
@@ -236,6 +247,9 @@ class Menu {
 
     _currentElements = _mergeElements(builder(), removed, preserved, added);
 
+    final handle =
+        await _materializer!.createOrUpdateMenuPre(this, _currentElements);
+
     for (final menu in preserved) {
       await menu._updateLocked();
     }
@@ -251,8 +265,8 @@ class Menu {
     }
 
     if (_currentHandle != null && _materializer != null) {
-      _currentHandle =
-          await _materializer!.createOrUpdateMenu(this, _currentElements);
+      _currentHandle = await _materializer!
+          .createOrUpdateMenuPost(this, _currentElements, handle);
     }
   }
 
@@ -290,7 +304,7 @@ class Menu {
   // callback
   final _pastActions = <int, VoidCallback>{};
 
-  MenuHandle? get currentHandle => _currentHandle;
+  MenuHandle? get currentHandle => _transferTarget._currentHandle;
 
   MenuHandle? _currentHandle;
 
@@ -360,6 +374,12 @@ class Menu {
     return res;
   }
 
+  Menu? _transferedTo;
+
+  Menu get _transferTarget {
+    return _transferedTo != null ? _transferedTo!._transferTarget : this;
+  }
+
   void _transferFrom(Menu oldMenu) {
     assert(_currentHandle == null);
     assert(_currentElements.isEmpty);
@@ -374,6 +394,11 @@ class Menu {
 
     _materializer = oldMenu._materializer;
     oldMenu._materializer = null;
+
+    _pastActions.addEntries(oldMenu._pastActions.entries);
+    oldMenu._pastActions.clear();
+
+    oldMenu._transferedTo = this;
 
     MenuManager.instance().didTransferMenu(this);
   }

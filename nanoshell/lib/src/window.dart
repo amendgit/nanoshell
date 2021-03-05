@@ -174,18 +174,31 @@ class LocalWindow extends Window {
     Rect? itemRect,
     bool preselectFirst = false,
   }) async {
-    return menu.materialize((handle) async {
-      final value = await _invokeMethod(
-          Methods.windowShowPopupMenu,
-          PopupMenuRequest(
-                  handle: handle,
-                  position: globalPosition,
-                  trackingRect: trackingRect,
-                  itemRect: itemRect,
-                  preselectFirst: preselectFirst)
-              .serialize());
-      return PopupMenuResponse.deserialize(value);
+    return menu.materialize((handle) {
+      return showPopupMenuWithHandle(handle, globalPosition,
+          trackingRect: trackingRect,
+          itemRect: itemRect,
+          preselectFirst: preselectFirst);
     });
+  }
+
+  Future<PopupMenuResponse> showPopupMenuWithHandle(
+    MenuHandle handle,
+    Offset globalPosition, {
+    Rect? trackingRect,
+    Rect? itemRect,
+    bool preselectFirst = false,
+  }) async {
+    final value = await _invokeMethod(
+        Methods.windowShowPopupMenu,
+        PopupMenuRequest(
+                handle: handle,
+                position: globalPosition,
+                trackingRect: trackingRect,
+                itemRect: itemRect,
+                preselectFirst: preselectFirst)
+            .serialize());
+    return PopupMenuResponse.deserialize(value);
   }
 
   Future<void> hidePopupMenu(MenuHandle handle) async {

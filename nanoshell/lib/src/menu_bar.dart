@@ -170,12 +170,17 @@ class _MenuBarState extends State<MenuBar>
 
   @override
   MenuMaterializer? createChildMaterializer() {
-    // we'll materialize individual menus instead
-    return null;
+    return DefaultMaterializer();
   }
 
   @override
-  FutureOr<MenuHandle> createOrUpdateMenu(
+  FutureOr<MenuHandle> createOrUpdateMenuPost(
+      Menu menu, List<MenuElement> elements, MenuHandle? handle) {
+    return handle!;
+  }
+
+  @override
+  FutureOr<MenuHandle> createOrUpdateMenuPre(
       Menu menu, List<MenuElement> elements) async {
     _elements = elements;
     if (!_elements.contains(_selectedElement)) {
@@ -210,7 +215,7 @@ class _MenuBarState extends State<MenuBar>
 
     menu.materialize((handle) async {
       return menuCompleter.future;
-    });
+    }, this);
 
     if (previousCompleter != null) {
       previousCompleter.complete();
@@ -264,8 +269,8 @@ class _MenuBarState extends State<MenuBar>
     final trackingRect = MatrixUtils.transformRect(
         menubarObject.getTransformTo(null), menubarRect);
 
-    final res = await win.showPopupMenu(
-      submenu,
+    final res = await win.showPopupMenuWithHandle(
+      submenu.currentHandle!,
       transformed.bottomLeft,
       trackingRect: trackingRect,
       itemRect: transformed,
