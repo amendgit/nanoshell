@@ -5,6 +5,7 @@ pub enum PlatformError {
     UnknownError,
     LaunchEngineFailure,
     SendMessageFailure { channel: String },
+    NotAvailable,
     NoEventFound,
 }
 
@@ -25,8 +26,11 @@ impl Display for PlatformError {
             PlatformError::NoEventFound => {
                 write!(
                     f,
-                    "Action requires prior mouse event and the event was not found."
+                    "Action requires prior mouse event and the event was not found"
                 )
+            }
+            PlatformError::NotAvailable => {
+                write!(f, "Feature is not available")
             }
         }
     }

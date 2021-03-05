@@ -51,7 +51,7 @@ impl PlatformBinaryMessenger {
             let channel = StrongPtr::new(NSString::alloc(nil).init_str(channel));
 
             // macos embedder doesn't return anything useful here; It also leaks the block sadly
-            let _: () = msg_send![*self.handle, setMessageHandlerOnChannel:*channel binaryMessageHandler:&*block];
+            let () = msg_send![*self.handle, setMessageHandlerOnChannel:*channel binaryMessageHandler:&*block];
         }
 
         self.registered.borrow_mut().insert(channel.into());
@@ -61,7 +61,7 @@ impl PlatformBinaryMessenger {
         self.registered.borrow_mut().remove(channel);
         unsafe {
             let channel = StrongPtr::new(NSString::alloc(nil).init_str(channel));
-            let _: () = msg_send![*self.handle, setMessageHandlerOnChannel:*channel binaryMessageHandler:nil];
+            let () = msg_send![*self.handle, setMessageHandlerOnChannel:*channel binaryMessageHandler:nil];
         }
     }
 
@@ -87,7 +87,7 @@ impl PlatformBinaryMessenger {
                 msg_send![class!(NSData), dataWithBytes:message.as_ptr() length:message.len()];
 
             // sendOnChannel: doesn't have return value :-/
-            let _: () =
+            let () =
                 msg_send![*self.handle, sendOnChannel:*channel message:data binaryReply:&*block];
         }
 
@@ -101,7 +101,7 @@ impl PlatformBinaryMessenger {
                 msg_send![class!(NSData), dataWithBytes:message.as_ptr() length:message.len()];
 
             // sendOnChannel: doesn't have return value :-/
-            let _: () = msg_send![*self.handle, sendOnChannel:*channel message:data];
+            let () = msg_send![*self.handle, sendOnChannel:*channel message:data];
         }
 
         Ok(())

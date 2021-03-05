@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use cocoa::appkit::NSScreen;
+use cocoa::appkit::{NSScreen, NSWindowTabbingMode};
 use cocoa::{
     appkit::{
         NSEvent, NSEventType, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
@@ -30,9 +30,11 @@ use NSEventType::{NSLeftMouseDown, NSLeftMouseUp, NSMouseMoved, NSRightMouseDown
 use crate::{
     codec::Value,
     shell::{
-        Context, DragEffect, DragRequest, PlatformWindowDelegate, Point, PopupMenuRequest,
-        PopupMenuResponse, Size, WindowFrame, WindowGeometry, WindowGeometryFlags,
-        WindowGeometryRequest, WindowStyle,
+        structs::{
+            DragEffect, DragRequest, PopupMenuRequest, PopupMenuResponse, WindowFrame,
+            WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        },
+        Context, PlatformWindowDelegate, Point, Size,
     },
     util::{LateRefCell, OkLog},
 };
@@ -88,6 +90,9 @@ impl PlatformWindow {
             let window = StrongPtr::new(window);
             window.setReleasedWhenClosed_(NO);
 
+            NSWindow::setAllowsAutomaticWindowTabbing_(*window, NO);
+            NSWindow::setTabbingMode_(*window, NSWindowTabbingMode::NSWindowTabbingModeDisallowed);
+
             let platform_delegate: id = msg_send![WINDOW_DELEGATE_CLASS.0, new];
             let platform_delegate = StrongPtr::new(platform_delegate);
 
@@ -119,7 +124,7 @@ impl PlatformWindow {
             let state_ptr = Box::into_raw(Box::new(weak.clone())) as *mut c_void;
             (**self.platform_window).set_ivar("imState", state_ptr);
 
-            let _: () =
+            let () =
                 msg_send![*self.platform_window, setContentViewController: *engine.view_controller];
         }
 
@@ -391,7 +396,7 @@ impl PlatformWindow {
     unsafe fn actually_show(&self) {
         if self.is_modal() {
             let parent = self.parent_platform_window.as_ref().unwrap().clone().load();
-            let _: () = msg_send![*parent, beginSheet:*self.platform_window completionHandler:nil];
+            let () = msg_send![*parent, beginSheet:*self.platform_window completionHandler:nil];
         } else {
             self.platform_window.makeKeyAndOrderFront_(nil);
         }
@@ -481,7 +486,7 @@ impl PlatformWindow {
         autoreleasepool(|| unsafe {
             let sheet_parent: id = msg_send![*self.platform_window, sheetParent];
             if sheet_parent != nil {
-                let _: () = msg_send![sheet_parent, endSheet:*self.platform_window];
+                let () = msg_send![sheet_parent, endSheet:*self.platform_window];
             }
             self.platform_window.close();
         });
@@ -535,7 +540,7 @@ impl PlatformWindow {
                 pressure:1
             ];
 
-            let _: () = msg_send![*self.platform_window, sendEvent: opposite];
+            let () = msg_send![*self.platform_window, sendEvent: opposite];
         }
     }
 
@@ -577,7 +582,7 @@ impl PlatformWindow {
                         clickCount:1
                         pressure:0
                     ];
-                    let _: () = msg_send![*self.platform_window, sendEvent: event];
+                    let () = msg_send![*self.platform_window, sendEvent: event];
                 }
             }
         });
@@ -653,13 +658,22 @@ impl PlatformWindow {
 
     pub fn hide_popup_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
         unsafe {
-            let _: () = msg_send![*menu.menu, cancelTracking];
+            let () = msg_send![*menu.menu, cancelTracking];
         }
         Ok(())
     }
 
     pub fn show_system_menu(&self) -> PlatformResult<()> {
         // no system menu in mac
+        Err(PlatformError::NotAvailable)
+    }
+
+    pub fn set_window_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        self.context
+            .menu_manager
+            .borrow()
+            .get_platform_menu_manager()
+            .set_menu_for_window(self.platform_window.clone(), menu);
         Ok(())
     }
 
@@ -745,6 +759,16 @@ lazy_static! {
             window_will_close as extern "C" fn(&Object, Sel, id) -> (),
         );
 
+        decl.add_method(
+            sel!(windowDidBecomeKey:),
+            window_did_become_key as extern "C" fn(&Object, Sel, id) -> (),
+        );
+
+        decl.add_method(
+            sel!(windowDidResignKey:),
+            window_did_resign_key as extern "C" fn(&Object, Sel, id) -> (),
+        );
+
         decl.add_method(sel!(dealloc), dealloc as extern "C" fn(&Object, Sel));
 
         decl.add_ivar::<*mut c_void>("imState");
@@ -814,9 +838,37 @@ extern "C" fn window_will_close(this: &Object, _: Sel, _: id) -> () {
             for i in 0..child_windows.count() {
                 child_windows.objectAtIndex(i).close();
             }
-            let _: () = msg_send![*state.platform_window, setContentViewController: nil];
+            let () = msg_send![*state.platform_window, setContentViewController: nil];
         }
+        state
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu_manager()
+            .window_will_close(state.platform_window.clone());
         delegate.will_close();
+    });
+}
+
+extern "C" fn window_did_become_key(this: &Object, _: Sel, _: id) -> () {
+    with_state_delegate(this, |state, _delegate| {
+        state
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu_manager()
+            .window_did_become_active(state.platform_window.clone());
+    });
+}
+
+extern "C" fn window_did_resign_key(this: &Object, _: Sel, _: id) -> () {
+    with_state_delegate(this, |state, _delegate| {
+        state
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu_manager()
+            .window_did_resign_active(state.platform_window.clone());
     });
 }
 
@@ -831,7 +883,7 @@ extern "C" fn send_event(this: &mut Object, _: Sel, e: id) -> () {
                 .insert(event_type as u64, event.clone());
         });
         let superclass = superclass(this);
-        let _: () = msg_send![super(this, superclass), sendEvent: e];
+        let () = msg_send![super(this, superclass), sendEvent: e];
     }
 }
 
@@ -907,6 +959,6 @@ extern "C" fn dealloc(this: &Object, _sel: Sel) {
         Box::from_raw(state_ptr);
 
         let superclass = superclass(this);
-        let _: () = msg_send![super(this, superclass), dealloc];
+        let () = msg_send![super(this, superclass), dealloc];
     }
 }

@@ -10,7 +10,10 @@ use crate::{
 };
 
 use super::{
-    constants::*, platform::menu::PlatformMenu, Context, EngineHandle, WindowMethodCallResult,
+    constants::*,
+    platform::menu::{PlatformMenu, PlatformMenuManager},
+    structs::{MenuAction, MenuCreateRequest, MenuDestroyRequest, SetMenuRequest},
+    Context, EngineHandle, WindowMethodCallResult,
 };
 
 struct MenuEntry {
@@ -21,47 +24,12 @@ struct MenuEntry {
 pub struct MenuManager {
     context: Rc<Context>,
     platform_menu_map: HashMap<MenuHandle, MenuEntry>,
+    platform_menu_manager: PlatformMenuManager,
     next_handle: MenuHandle,
 }
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MenuHandle(pub(crate) i64);
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
-pub struct MenuItem {
-    pub id: i64,
-    pub title: String,
-    pub enabled: bool,
-    pub separator: bool,
-    pub checked: bool,
-    pub submenu: Option<MenuHandle>,
-}
-
-impl PartialEq for MenuItem {
-    fn eq(&self, other: &Self) -> bool {
-        return self.id == other.id;
-    }
-}
-
-#[derive(serde::Deserialize, Default, Debug)]
-pub struct Menu {
-    pub items: Vec<MenuItem>,
-}
-#[derive(serde::Deserialize)]
-struct CreateRequest {
-    handle: Option<MenuHandle>,
-    menu: Menu,
-}
-#[derive(serde::Deserialize)]
-struct DestroyRequest {
-    handle: MenuHandle,
-}
-
-#[derive(serde::Serialize)]
-struct OnMenuAction {
-    handle: MenuHandle,
-    id: i64,
-}
 
 impl MenuManager {
     pub(super) fn new(context: Rc<Context>) -> Self {
@@ -77,15 +45,27 @@ impl MenuManager {
             });
 
         Self {
-            context,
+            context: context.clone(),
             platform_menu_map: HashMap::new(),
+            platform_menu_manager: PlatformMenuManager::new(context.clone()),
             next_handle: MenuHandle(1),
         }
     }
 
+    pub fn get_platform_menu(&self, menu: MenuHandle) -> Result<Rc<PlatformMenu>> {
+        self.platform_menu_map
+            .get(&menu)
+            .map(|c| c.platform_menu.clone())
+            .ok_or(Error::InvalidMenuHandle)
+    }
+
+    pub fn get_platform_menu_manager(&self) -> &PlatformMenuManager {
+        &self.platform_menu_manager
+    }
+
     fn on_create_or_update(
         &mut self,
-        request: CreateRequest,
+        request: MenuCreateRequest,
         engine: EngineHandle,
     ) -> Result<MenuHandle> {
         let handle = request.handle.unwrap_or_else(|| {
@@ -113,12 +93,6 @@ impl MenuManager {
         Ok(handle)
     }
 
-    pub fn get_platform_menu(&self, menu: MenuHandle) -> Option<Rc<PlatformMenu>> {
-        self.platform_menu_map
-            .get(&menu)
-            .map(|c| c.platform_menu.clone())
-    }
-
     fn invoker_for_menu(&self, menu_handle: MenuHandle) -> Option<MethodInvoker<Value>> {
         self.platform_menu_map.get(&menu_handle).and_then(|e| {
             self.context
@@ -133,7 +107,7 @@ impl MenuManager {
             invoker
                 .call_method(
                     method::menu::ON_ACTION.into(),
-                    to_value(&OnMenuAction {
+                    to_value(&MenuAction {
                         handle: menu_handle,
                         id: id,
                     })
@@ -185,14 +159,28 @@ impl MenuManager {
     ) {
         match call.method.as_str() {
             method::menu::CREATE_OR_UPDATE => {
-                let request: CreateRequest = from_value(&call.args).unwrap();
+                let request: MenuCreateRequest = from_value(&call.args).unwrap();
                 let res = self.on_create_or_update(request, engine);
                 reply.send(Self::map_result(res));
             }
             method::menu::DESTROY => {
-                let request: DestroyRequest = from_value(&call.args).unwrap();
+                let request: MenuDestroyRequest = from_value(&call.args).unwrap();
                 self.platform_menu_map.remove(&request.handle);
                 reply.send_ok(Value::Null);
+            }
+            method::menu::SET_APP_MENU => {
+                let request: SetMenuRequest = from_value(&call.args).unwrap();
+                let menu = self.platform_menu_map.get(&request.handle);
+                match menu {
+                    Some(menu) => reply.send(Self::map_result(
+                        self.platform_menu_manager
+                            .set_app_menu(menu.platform_menu.clone())
+                            .map_err(|e| e.into()),
+                    )),
+                    None => {
+                        reply.send(Self::map_result::<()>(Err(Error::InvalidMenuHandle)));
+                    }
+                }
             }
             _ => {}
         };

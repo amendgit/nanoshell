@@ -9,14 +9,18 @@ use crate::{
         Value,
     },
     util::{LateRefCell, OkLog},
-    Error, Result,
+    Result,
 };
 
 use super::{
-    constants::*, platform::window::PlatformWindow, Context, DragEffect, DragRequest, DragResult,
-    DraggingInfo, EngineHandle, HidePopupMenuRequest, PopupMenuRequest, PopupMenuResponse,
-    WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowMethodCallReply,
-    WindowMethodCallResult, WindowMethodInvoker, WindowStyle,
+    constants::*,
+    platform::window::PlatformWindow,
+    structs::{
+        DragEffect, DragRequest, DragResult, DraggingInfo, HidePopupMenuRequest, PopupMenuRequest,
+        PopupMenuResponse, SetMenuRequest, WindowGeometry, WindowGeometryFlags,
+        WindowGeometryRequest, WindowStyle,
+    },
+    Context, EngineHandle, WindowMethodCallReply, WindowMethodCallResult, WindowMethodInvoker,
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Copy, Clone, Hash, Eq, PartialEq)]
@@ -170,10 +174,10 @@ impl Window {
             .borrow()
             .get_platform_menu(request.handle);
         match menu {
-            Some(menu) => self
+            Ok(menu) => self
                 .platform_window()
                 .show_popup_menu(menu, request, |r| on_done(r.map_err(|e| e.into()))),
-            None => on_done(Err(Error::InvalidMenuHandle)),
+            Err(error) => on_done(Err(error)),
         }
     }
 
@@ -182,8 +186,7 @@ impl Window {
             .context
             .menu_manager
             .borrow()
-            .get_platform_menu(request.handle)
-            .ok_or(Error::InvalidMenuHandle)?;
+            .get_platform_menu(request.handle)?;
         self.platform_window()
             .hide_popup_menu(menu)
             .map_err(|e| e.into())
@@ -192,6 +195,17 @@ impl Window {
     fn show_system_menu(&self) -> Result<()> {
         self.platform_window()
             .show_system_menu()
+            .map_err(|e| e.into())
+    }
+
+    fn set_window_menu(&self, request: SetMenuRequest) -> Result<()> {
+        let menu = self
+            .context
+            .menu_manager
+            .borrow()
+            .get_platform_menu(request.handle)?;
+        self.platform_window()
+            .set_window_menu(menu)
             .map_err(|e| e.into())
     }
 
@@ -273,6 +287,9 @@ impl Window {
             }
             method::window::SHOW_SYSTEM_MENU => {
                 return Self::reply(reply, &arg, |()| self.show_system_menu());
+            }
+            method::window::SET_WINDOW_MENU => {
+                return Self::reply(reply, &arg, |req| self.set_window_menu(req));
             }
             method::drag_source::BEGIN_DRAG_SESSION => {
                 return Self::reply(reply, &arg, |request| self.begin_drag_session(request));

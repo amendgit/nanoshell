@@ -3,8 +3,11 @@ use std::rc::{Rc, Weak};
 use crate::{
     codec::Value,
     shell::{
-        Context, DragEffect, DragRequest, PlatformWindowDelegate, PopupMenuRequest, WindowGeometry,
-        WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        structs::{
+            DragEffect, DragRequest, PopupMenuRequest, PopupMenuResponse, WindowGeometry,
+            WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        },
+        Context, PlatformWindowDelegate,
     },
 };
 
@@ -92,7 +95,7 @@ impl PlatformWindow {
 
     pub fn show_popup_menu<F>(&self, menu: Rc<PlatformMenu>, request: PopupMenuRequest, on_done: F)
     where
-        F: FnOnce(PlatformResult<()>) -> () + 'static,
+        F: FnOnce(PlatformResult<PopupMenuResponse>) -> () + 'static,
     {
         on_done(Err(PlatformError::NotImplemented))
     }
@@ -102,6 +105,10 @@ impl PlatformWindow {
     }
 
     pub fn show_system_menu(&self) -> PlatformResult<()> {
-        Err(PlatformError::NotImplemented);
+        Err(PlatformError::NotImplemented)
+    }
+
+    pub fn set_window_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        Err(PlatformError::NotImplemented)
     }
 }

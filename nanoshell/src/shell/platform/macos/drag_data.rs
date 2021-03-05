@@ -134,7 +134,7 @@ impl DragDataAdapter for FilesDragDataAdapter {
                     let item = pasteboard_items.next_item();
                     let url: id = msg_send![class!(NSURL), fileURLWithPath: *to_nsstring(file)];
                     let string: id = msg_send![url, absoluteString];
-                    let _: () = msg_send![*item, setString:string forType:*file_url];
+                    let () = msg_send![*item, setString:string forType:*file_url];
                 }
             }
         }
@@ -198,7 +198,7 @@ impl DragDataAdapter for UrlsDragDataAdapter {
                 for url in &urls {
                     let item = pasteboard_items.next_item();
                     let string = to_nsstring(url);
-                    let _: () = msg_send![*item, setString:*string forType:*url_type];
+                    let () = msg_send![*item, setString:*string forType:*url_type];
                 }
             }
         }
@@ -264,7 +264,7 @@ impl DragDataAdapter for FallThroughDragDataAdapter {
         let data = to_nsdata(&data);
         let item = pasteboard_items.next_item();
         unsafe {
-            let _: () = msg_send![*item, setData:*data forType:*self.format];
+            let () = msg_send![*item, setData:*data forType:*self.format];
         }
     }
 

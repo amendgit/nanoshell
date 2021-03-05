@@ -2,14 +2,18 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     ffi::c_void,
+    fmt::Write,
+    hash::Hash,
     rc::{Rc, Weak},
+    time::Duration,
 };
 
 use cocoa::{
-    appkit::{NSMenu, NSMenuItem},
-    base::{id, nil, NO},
-    foundation::NSInteger,
+    appkit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem},
+    base::{id, nil, NO, YES},
+    foundation::{NSInteger, NSUInteger},
 };
+use lazy_static::__Deref;
 use objc::{
     declare::ClassDecl,
     rc::StrongPtr,
@@ -17,7 +21,8 @@ use objc::{
 };
 
 use crate::{
-    shell::{Context, Menu, MenuHandle, MenuItem, MenuManager},
+    shell::structs::{Menu, MenuItem, MenuItemRole},
+    shell::{structs::MenuRole, Context, MenuHandle, MenuManager, ScheduledCallback},
     util::{update_diff, DiffResult, LateRefCell},
 };
 
@@ -25,6 +30,110 @@ use super::{
     error::PlatformResult,
     utils::{superclass, to_nsstring},
 };
+
+struct StrongPtrWrapper(StrongPtr);
+
+impl PartialEq for StrongPtrWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        return self.0.deref() == other.0.deref();
+    }
+}
+
+impl Eq for StrongPtrWrapper {}
+
+impl Hash for StrongPtrWrapper {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.deref().hash(state);
+    }
+}
+
+pub struct PlatformMenuManager {
+    context: Rc<Context>,
+    app_menu: RefCell<Option<Rc<PlatformMenu>>>,
+    window_menus: RefCell<HashMap<StrongPtrWrapper, Rc<PlatformMenu>>>,
+    update_handle: RefCell<Option<ScheduledCallback>>,
+}
+
+impl PlatformMenuManager {
+    pub fn new(context: Rc<Context>) -> Self {
+        Self {
+            context: context,
+            app_menu: RefCell::new(None),
+            window_menus: RefCell::new(HashMap::new()),
+            update_handle: RefCell::new(None),
+        }
+    }
+
+    fn update_menu(&self) {
+        unsafe {
+            let mut menu = self.app_menu.borrow().clone();
+            let app = NSApplication::sharedApplication(nil);
+            let key: id = msg_send![app, keyWindow];
+            if key != nil {
+                let key = StrongPtr::retain(key);
+                menu = self
+                    .window_menus
+                    .borrow()
+                    .get(&StrongPtrWrapper(key))
+                    .map(|e| e.clone())
+                    .or(menu);
+            }
+            match menu {
+                Some(menu) => {
+                    let current: id = msg_send![app, mainMenu];
+                    if current != *menu.menu {
+                        // let () = msg_send![app, setMainMenu: *menu.menu];
+                        menu.set_as_app_menu();
+                    }
+                }
+                None => {
+                    let () = msg_send![app, setMainMenu: nil];
+                }
+            }
+        }
+    }
+
+    fn schedule_update(&self) {
+        let context = self.context.clone();
+        let callback = self.context.run_loop.borrow().schedule(
+            move || {
+                context
+                    .menu_manager
+                    .borrow()
+                    .get_platform_menu_manager()
+                    .update_menu();
+            },
+            Duration::from_secs(0),
+        );
+        self.update_handle.borrow_mut().replace(callback);
+    }
+
+    pub fn set_app_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        self.app_menu.borrow_mut().replace(menu);
+        self.schedule_update();
+        return Ok(());
+    }
+
+    pub fn set_menu_for_window(&self, window: StrongPtr, menu: Rc<PlatformMenu>) {
+        self.window_menus
+            .borrow_mut()
+            .insert(StrongPtrWrapper(window), menu);
+    }
+
+    pub fn window_will_close(&self, window: StrongPtr) {
+        self.window_menus
+            .borrow_mut()
+            .remove(&StrongPtrWrapper(window));
+    }
+
+    pub fn window_did_become_active(&self, _window: StrongPtr) {
+        self.schedule_update();
+    }
+
+    pub fn window_did_resign_active(&self, _window: StrongPtr) {
+        self.schedule_update();
+    }
+}
 
 pub struct PlatformMenu {
     context: Rc<Context>,
@@ -36,11 +145,14 @@ pub struct PlatformMenu {
     weak_self: LateRefCell<Weak<PlatformMenu>>,
 }
 
+const ITEM_TAG: NSInteger = 9999;
+
 impl PlatformMenu {
     pub fn new(context: Rc<Context>, handle: MenuHandle) -> Self {
         unsafe {
-            let menu: id = NSMenu::alloc(nil).initWithTitle_(*to_nsstring("Menu title"));
-            let _: () = msg_send![menu, setAutoenablesItems: NO];
+            let menu: id = NSMenu::alloc(nil).initWithTitle_(*to_nsstring(""));
+            let () = msg_send![menu, setAutoenablesItems: NO];
+
             let target: id = msg_send![MENU_ITEM_TARGET_CLASS.0, new];
             let target = StrongPtr::new(target);
             Self {
@@ -66,6 +178,10 @@ impl PlatformMenu {
     pub fn update_from_menu(&self, menu: Menu, manager: &MenuManager) -> PlatformResult<()> {
         let mut previous_menu = self.previous_menu.borrow_mut();
 
+        unsafe {
+            let () = msg_send![*self.menu, setTitle:to_nsstring(&remove_mnemonics(&menu.title))];
+        }
+
         let diff = update_diff(&previous_menu.items, &menu.items, |a, b| {
             Self::can_update(a, b)
         });
@@ -81,8 +197,8 @@ impl PlatformMenu {
                     if let Some(item) = item {
                         unsafe {
                             // remove submenu, just in case
-                            let _: () = msg_send![*item, setMenu: nil];
-                            let _: () = msg_send![*self.menu, removeItem:*item];
+                            let () = msg_send![*item, setMenu: nil];
+                            let () = msg_send![*self.menu, removeItem:*item];
                         }
                     }
                     None
@@ -132,6 +248,51 @@ impl PlatformMenu {
         Ok(())
     }
 
+    fn prepare_for_app_menu(&self) {
+        match self.previous_menu.borrow().role {
+            Some(MenuRole::Window) => unsafe {
+                // Remove all items that don't have our tags; These were added by cocoa; Not doing this
+                // will result in duplicate items
+                let items: NSUInteger = msg_send![*self.menu, numberOfItems];
+                for i in (0..items).rev() {
+                    let item: id = msg_send![*self.menu, itemAtIndex: i];
+                    let tag: NSInteger = msg_send![item, tag];
+                    if tag != ITEM_TAG {
+                        let () = msg_send![*self.menu, removeItemAtIndex: i];
+                    }
+                }
+
+                let app = NSApplication::sharedApplication(nil);
+                NSApplication::setWindowsMenu_(app, *self.menu);
+                let () = msg_send![*self.menu, setAutoenablesItems: YES];
+            },
+            None => {}
+        };
+
+        let children: Vec<MenuHandle> = self
+            .previous_menu
+            .borrow()
+            .items
+            .iter()
+            .filter_map(|f| f.submenu)
+            .collect();
+        for c in children {
+            let menu = self.context.menu_manager.borrow().get_platform_menu(c);
+            if let Ok(menu) = menu {
+                menu.prepare_for_app_menu();
+            }
+        }
+    }
+
+    fn set_as_app_menu(&self) {
+        unsafe {
+            let app = NSApplication::sharedApplication(nil);
+            let () = msg_send![app, setWindowsMenu: nil];
+            self.prepare_for_app_menu();
+            let () = msg_send![app, setMainMenu: *self.menu];
+        }
+    }
+
     fn can_update(old_item: &MenuItem, new_item: &MenuItem) -> bool {
         // can't change separator item to non separator
         return old_item.separator == new_item.separator;
@@ -142,29 +303,68 @@ impl PlatformMenu {
             return;
         }
         unsafe {
-            if let Some(submenu) = menu_item
-                .submenu
-                .and_then(|s| menu_manager.get_platform_menu(s))
-            {
-                let _: () = msg_send![item, setSubmenu:*submenu.menu];
-                let _: () = msg_send![item, setTarget: nil];
-            } else {
-                let _: () = msg_send![item, setSubmenu: nil];
-                let _: () = msg_send![item, setTarget: *self.target];
-                let _: () = msg_send![item, setAction: sel!(onAction:)];
-            }
-            let _: () = msg_send![item, setTitle:*to_nsstring(&menu_item.title)];
-            let _: () = msg_send![item, setEnabled:menu_item.enabled];
-            let state: NSInteger = {
-                match menu_item.checked {
-                    true => 1,
-                    false => 0,
+            match &menu_item.role {
+                Some(role) => {
+                    self.update_from_role(item, &menu_item.title, role.clone());
                 }
-            };
-            let _: () = msg_send![item, setState: state];
-            let number: id = msg_send![class!(NSNumber), numberWithLongLong:menu_item.id];
-            let _: () = msg_send![item, setRepresentedObject: number];
+                None => {
+                    self.update_from_menu_item(item, menu_item, menu_manager);
+                }
+            }
         }
+    }
+
+    unsafe fn update_from_role(&self, item: id, title: &str, role: MenuItemRole) {
+        let () = msg_send![item, setTitle:*to_nsstring(&remove_mnemonics(title))];
+        let () = msg_send![item, setTarget: nil];
+        match role {
+            MenuItemRole::MinimizeWindow => {
+                let () = msg_send![item, setAction: sel!(performMiniaturize:)];
+                let () = msg_send![item, setKeyEquivalent: to_nsstring("m")];
+                let () = msg_send![
+                    item,
+                    setKeyEquivalentModifierMask: NSEventModifierFlags::NSCommandKeyMask
+                ];
+            }
+            MenuItemRole::ZoomWindow => {
+                let () = msg_send![item, setAction: sel!(performZoom:)];
+            }
+            MenuItemRole::BringAllToFront => {
+                let () = msg_send![item, setAction: sel!(arrangeInFront:)];
+            }
+        }
+    }
+
+    unsafe fn update_from_menu_item(
+        &self,
+        item: id,
+        menu_item: &MenuItem,
+        menu_manager: &MenuManager,
+    ) {
+        if let Some(submenu) = menu_item
+            .submenu
+            .and_then(|s| menu_manager.get_platform_menu(s).ok())
+        {
+            let () = msg_send![item, setSubmenu:*submenu.menu];
+            let () = msg_send![item, setTarget: nil];
+            let () = msg_send![item, setAction: nil];
+        } else {
+            let () = msg_send![item, setSubmenu: nil];
+            let () = msg_send![item, setTarget: *self.target];
+            let () = msg_send![item, setAction: sel!(onAction:)];
+        }
+
+        let () = msg_send![item, setTitle:*to_nsstring(&remove_mnemonics(&menu_item.title))];
+        let () = msg_send![item, setEnabled:menu_item.enabled];
+        let state: NSInteger = {
+            match menu_item.checked {
+                true => 1,
+                false => 0,
+            }
+        };
+        let () = msg_send![item, setState: state];
+        let number: id = msg_send![class!(NSNumber), numberWithLongLong:menu_item.id];
+        let () = msg_send![item, setRepresentedObject: number];
     }
 
     fn menu_item_action(&self, item: id) {
@@ -189,6 +389,7 @@ impl PlatformMenu {
                     Sel::from_ptr(0 as *const _),
                     *to_nsstring(""),
                 );
+                let () = msg_send![res, setTag: ITEM_TAG];
                 self.update_menu_item(res, menu_item, menu_manager);
                 StrongPtr::new(res)
             }
@@ -225,7 +426,7 @@ extern "C" fn dealloc(this: &Object, _sel: Sel) {
         Box::from_raw(state_ptr);
 
         let superclass = superclass(this);
-        let _: () = msg_send![super(this, superclass), dealloc];
+        let () = msg_send![super(this, superclass), dealloc];
     }
 }
 
@@ -238,4 +439,23 @@ extern "C" fn on_action(this: &Object, _sel: Sel, sender: id) -> () {
     if let Some(upgraded) = upgraded {
         upgraded.menu_item_action(sender);
     }
+}
+
+fn remove_mnemonics(title: &str) -> String {
+    let mut res = String::new();
+    let mut mnemonic = false;
+    for c in title.chars() {
+        if c == '&' {
+            if !mnemonic {
+                mnemonic = true;
+                continue;
+            } else {
+                res.write_char('&').unwrap();
+                mnemonic = false;
+                continue;
+            }
+        }
+        res.write_char(c).unwrap();
+    }
+    return res;
 }

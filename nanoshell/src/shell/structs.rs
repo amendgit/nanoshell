@@ -216,3 +216,71 @@ pub struct WindowStyle {
     pub can_maximize: bool,
     pub can_full_screen: bool,
 }
+
+//
+// Menu
+//
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum MenuItemRole {
+    MinimizeWindow,
+    ZoomWindow,
+    BringAllToFront,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum MenuRole {
+    Window,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuItem {
+    pub id: i64,
+    pub title: String,
+    pub enabled: bool,
+    pub separator: bool,
+    pub checked: bool,
+    pub role: Option<MenuItemRole>,
+    pub submenu: Option<MenuHandle>,
+}
+
+impl PartialEq for MenuItem {
+    fn eq(&self, other: &Self) -> bool {
+        return self.id == other.id;
+    }
+}
+
+#[derive(serde::Deserialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Menu {
+    pub title: String,
+    pub role: Option<MenuRole>,
+    pub items: Vec<MenuItem>,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuCreateRequest {
+    pub handle: Option<MenuHandle>,
+    pub menu: Menu,
+}
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuDestroyRequest {
+    pub handle: MenuHandle,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MenuAction {
+    pub handle: MenuHandle,
+    pub id: i64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SetMenuRequest {
+    pub handle: MenuHandle,
+}

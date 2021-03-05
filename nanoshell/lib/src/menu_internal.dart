@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:nanoshell/src/util.dart';
 
 import 'constants.dart';
 import 'menu.dart';
@@ -29,6 +30,7 @@ class MenuElement {
         'enabled': item.action != null || item.submenu != null,
         'separator': item.separator,
         'checked': item.checked,
+        'role': item.role != null ? enumToString(item.role) : null,
       };
 }
 
@@ -45,7 +47,11 @@ class DefaultMaterializer extends MenuMaterializer {
   @override
   FutureOr<MenuHandle> createOrUpdateMenu(
       Menu menu, List<MenuElement> elements) async {
-    final serialized = {'items': elements.map((e) => e.serialize()).toList()};
+    final serialized = {
+      'title': menu.title,
+      'role': menu.role != null ? enumToString(menu.role!) : null,
+      'items': elements.map((e) => e.serialize()).toList(),
+    };
 
     final handle = menu.currentHandle;
 
@@ -114,12 +120,24 @@ class MenuManager {
     }
   }
 
+  Future<void> setAppMenu(MenuHandle handle) async {
+    return _menuChannel.invokeMethod(Methods.menuSetAppMenu, {
+      'handle': handle.value,
+    });
+  }
+
   void registerDelegate(MenuManagerDelegate delegate) {
     _delegates.add(delegate);
   }
 
   void unregisterDelegate(MenuManagerDelegate delegate) {
     _delegates.remove(delegate);
+  }
+
+  void didTransferMenu(Menu menu) {
+    if (menu.currentHandle != null) {
+      _activeMenus[menu.currentHandle!] = menu;
+    }
   }
 
   final _activeMenus = <MenuHandle, Menu>{};

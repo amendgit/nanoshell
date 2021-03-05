@@ -168,22 +168,24 @@ class LocalWindow extends Window {
   }
 
   Future<PopupMenuResponse> showPopupMenu(
-    MenuHandle handle,
+    Menu menu,
     Offset globalPosition, {
     Rect? trackingRect,
     Rect? itemRect,
-    bool preselectFirst: false,
+    bool preselectFirst = false,
   }) async {
-    final value = await _invokeMethod(
-        Methods.windowShowPopupMenu,
-        PopupMenuRequest(
-                handle: handle,
-                position: globalPosition,
-                trackingRect: trackingRect,
-                itemRect: itemRect,
-                preselectFirst: preselectFirst)
-            .serialize());
-    return PopupMenuResponse.deserialize(value);
+    return menu.materialize((handle) async {
+      final value = await _invokeMethod(
+          Methods.windowShowPopupMenu,
+          PopupMenuRequest(
+                  handle: handle,
+                  position: globalPosition,
+                  trackingRect: trackingRect,
+                  itemRect: itemRect,
+                  preselectFirst: preselectFirst)
+              .serialize());
+      return PopupMenuResponse.deserialize(value);
+    });
   }
 
   Future<void> hidePopupMenu(MenuHandle handle) async {
@@ -193,6 +195,31 @@ class LocalWindow extends Window {
 
   Future<void> showSystemMenu() async {
     await _invokeMethod(Methods.windowShowSystemMenu);
+  }
+
+  Completer? _currentWindowMenuCompleter;
+
+  Future<void> setWindowMenu(Menu menu) {
+    final previousCompleter = _currentWindowMenuCompleter;
+
+    final functionCompleter = Completer();
+    final menuCompleter = Completer();
+    _currentWindowMenuCompleter = menuCompleter;
+
+    menu.materialize((handle) async {
+      await _invokeMethod(Methods.windowSetWindowMenu, {
+        'handle': menu.currentHandle!.value,
+      });
+      functionCompleter.complete();
+      // keep the handle alive until completer
+      return menuCompleter.future;
+    });
+
+    if (previousCompleter != null) {
+      previousCompleter.complete();
+    }
+
+    return functionCompleter.future;
   }
 
   Future<void> performDrag() async {

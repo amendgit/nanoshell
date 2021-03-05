@@ -33,7 +33,6 @@ class _PopupMenuState extends State<PopupMenu> {
     return GestureDetector(
       onSecondaryTapDown: (e) async {
         final menu = Menu(_buildMenuItems);
-        final handle = await menu.materialize();
 
         // Menu can be updated while visible
         final timer = Timer.periodic(Duration(milliseconds: 500), (timer) {
@@ -41,9 +40,8 @@ class _PopupMenuState extends State<PopupMenu> {
           menu.update();
         });
 
-        await Window.of(context).showPopupMenu(handle, e.globalPosition);
+        await Window.of(context).showPopupMenu(menu, e.globalPosition);
 
-        await menu.unmaterialize();
         timer.cancel();
       },
       child: Container(

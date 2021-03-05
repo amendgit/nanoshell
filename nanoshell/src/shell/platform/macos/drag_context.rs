@@ -11,7 +11,8 @@ use cocoa::{
 use objc::rc::{autoreleasepool, StrongPtr};
 
 use crate::shell::{
-    Context, DragData, DragEffect, DragRequest, DraggingInfo, PlatformWindowDelegate, Point,
+    structs::{DragData, DragEffect, DragRequest, DraggingInfo},
+    Context, PlatformWindowDelegate, Point,
 };
 
 use super::{
@@ -69,7 +70,7 @@ impl DragContext {
 
         unsafe {
             let types = array_with_objects(&types);
-            let _: () = msg_send![window, registerForDraggedTypes: types];
+            let () = msg_send![window, registerForDraggedTypes: types];
         }
     }
 
@@ -176,7 +177,7 @@ impl DragContext {
             let dragging_item: id = msg_send![class!(NSDraggingItem), alloc];
             let dragging_item =
                 StrongPtr::new(msg_send![dragging_item, initWithPasteboardWriter:*item]);
-            let _: () = msg_send![*dragging_item,
+            let () = msg_send![*dragging_item,
                setDraggingFrame:rect.clone()
                contents:if first {*snapshot } else {nil}
             ];

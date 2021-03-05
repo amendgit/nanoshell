@@ -129,7 +129,7 @@ impl PlatformRunLoop {
             ];
 
             // // To stop event loop immediately, we need to post event.
-            let _: () = msg_send![app, postEvent: dummy_event atStart: YES];
+            let () = msg_send![app, postEvent: dummy_event atStart: YES];
         }
     }
 

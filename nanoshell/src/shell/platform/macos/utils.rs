@@ -18,7 +18,7 @@ use objc::{
     runtime::{Class, Object},
 };
 
-use crate::shell::{ImageData, Point, Rect, Size};
+use crate::shell::{structs::ImageData, Point, Rect, Size};
 
 impl<'a> From<&'a Size> for NSSize {
     fn from(size: &'a Size) -> Self {
@@ -104,14 +104,14 @@ pub fn to_nsstring(string: &str) -> StrongPtr {
     }
 }
 
-pub fn from_nsdata(data: id) -> Vec<u8> {
-    unsafe {
-        let bytes: *const u8 = msg_send![data, bytes];
-        let length: usize = msg_send![data, length];
-        let data: &[u8] = std::slice::from_raw_parts(bytes, length);
-        data.into()
-    }
-}
+// pub fn from_nsdata(data: id) -> Vec<u8> {
+//     unsafe {
+//         let bytes: *const u8 = msg_send![data, bytes];
+//         let length: usize = msg_send![data, length];
+//         let data: &[u8] = std::slice::from_raw_parts(bytes, length);
+//         data.into()
+//     }
+// }
 
 pub fn to_nsdata(data: &[u8]) -> StrongPtr {
     unsafe {

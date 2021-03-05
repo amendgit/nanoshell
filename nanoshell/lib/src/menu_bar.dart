@@ -200,12 +200,21 @@ class _MenuBarState extends State<MenuBar>
     });
   }
 
-  void updateMenu(Menu menu) async {
-    if (_menu != null) {
-      await _menu!.unmaterialize();
+  static Completer? _currentMenuCompleter;
+
+  void updateMenu(Menu menu) {
+    final previousCompleter = _currentMenuCompleter;
+
+    final menuCompleter = Completer();
+    _currentMenuCompleter = menuCompleter;
+
+    menu.materialize((handle) async {
+      return menuCompleter.future;
+    });
+
+    if (previousCompleter != null) {
+      previousCompleter.complete();
     }
-    _menu = menu;
-    await menu.materialize(this);
   }
 
   void selectItem(MenuElement item, {bool withKeyboard = false}) async {
@@ -243,7 +252,6 @@ class _MenuBarState extends State<MenuBar>
 
     _menuVisible = item;
 
-    final handle = await submenu.materialize();
     final win = Window.of(context);
     final box = _keys[item]!.currentContext!.findRenderObject() as RenderBox;
     final itemRect = Rect.fromLTWH(0, 0, box.size.width, box.size.height);
@@ -257,13 +265,13 @@ class _MenuBarState extends State<MenuBar>
         menubarObject.getTransformTo(null), menubarRect);
 
     final res = await win.showPopupMenu(
-      handle,
+      submenu,
       transformed.bottomLeft,
       trackingRect: trackingRect,
       itemRect: transformed,
       preselectFirst: withKeyboard,
     );
-    await submenu.unmaterialize();
+
     if (res.itemSelected) {
       unfocus();
     }
@@ -453,9 +461,6 @@ class _MenuBarState extends State<MenuBar>
   var _state = _State.inactive;
 
   int _cookie = 0;
-
-  // assigned menu
-  Menu? _menu;
 
   List<MenuElement> _elements;
 

@@ -50,7 +50,7 @@ impl PlatformEngine {
 
     pub fn shut_down(&mut self) -> PlatformResult<()> {
         autoreleasepool(|| unsafe {
-            let _: () = msg_send![*self.handle, shutDownEngine];
+            let () = msg_send![*self.handle, shutDownEngine];
         });
         Ok(())
     }
