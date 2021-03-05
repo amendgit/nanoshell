@@ -8,24 +8,16 @@ use std::{
 use crate::{
     codec::Value,
     shell::{
-        Context, DragEffect, DragRequest, IPoint, PlatformWindowDelegate, Point, PopupMenuRequest,
-        PopupMenuResponse, WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        structs::{
+            DragEffect, DragRequest, PopupMenuRequest, PopupMenuResponse, WindowGeometry,
+            WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        },
+        Context, IPoint, PlatformWindowDelegate, Point,
     },
     util::LateRefCell,
 };
 
-use super::{
-    all_bindings::*,
-    drag_context::DragContext,
-    dxgi_hook::{set_override_parent_hwnd, take_override_parent_hwnd},
-    engine::PlatformEngine,
-    error::PlatformResult,
-    flutter_api::*,
-    menu::PlatformMenu,
-    window_adapter::{SetWindowLongPtrW, WindowAdapter},
-    window_base::{WindowBaseState, WindowDelegate},
-    window_menu::{WindowMenu, WindowMenuDelegate},
-};
+use super::{all_bindings::*, drag_context::DragContext, dxgi_hook::{set_override_parent_hwnd, take_override_parent_hwnd}, engine::PlatformEngine, error::{PlatformError, PlatformResult}, flutter_api::*, menu::PlatformMenu, window_adapter::{SetWindowLongPtrW, WindowAdapter}, window_base::{WindowBaseState, WindowDelegate}, window_menu::{WindowMenu, WindowMenuDelegate}};
 
 pub type PlatformWindowType = HWND;
 
@@ -386,6 +378,10 @@ impl PlatformWindow {
             )
             .detach();
         Ok(())
+    }
+
+    pub fn set_window_menu(&self, _menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        Err(PlatformError::NotAvailable)
     }
 
     pub fn begin_drag_session(&self, request: DragRequest) -> PlatformResult<()> {

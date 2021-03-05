@@ -5,7 +5,10 @@ use std::{
     time::Duration,
 };
 
-use crate::shell::{Context, IPoint, IRect, PopupMenuRequest, PopupMenuResponse};
+use crate::shell::{
+    structs::{PopupMenuRequest, PopupMenuResponse},
+    Context, IPoint, IRect,
+};
 
 use super::{
     all_bindings::*,

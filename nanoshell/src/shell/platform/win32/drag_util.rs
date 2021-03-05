@@ -9,7 +9,7 @@ use std::{
 use widestring::WideCStr;
 use windows::{Guid, FALSE, TRUE};
 
-use crate::shell::{DragEffect, ImageData};
+use crate::shell::structs::{DragEffect, ImageData};
 
 use super::{all_bindings::*, util::as_u8_slice};
 

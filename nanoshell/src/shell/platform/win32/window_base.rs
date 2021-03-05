@@ -5,8 +5,10 @@ use std::{
 
 use crate::{
     shell::{
-        IPoint, IRect, ISize, Point, Rect, Size, WindowFrame, WindowGeometry, WindowGeometryFlags,
-        WindowGeometryRequest, WindowStyle,
+        structs::{
+            WindowFrame, WindowGeometry, WindowGeometryFlags, WindowGeometryRequest, WindowStyle,
+        },
+        IPoint, IRect, ISize, Point, Rect, Size,
     },
     util::OkLog,
 };

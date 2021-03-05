@@ -3,10 +3,17 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use super::{all_bindings::*, error::PlatformResult, util::to_utf16};
+use super::{
+    all_bindings::*,
+    error::{PlatformError, PlatformResult},
+    util::to_utf16,
+};
 
 use crate::{
-    shell::{Context, Menu, MenuHandle, MenuItem, MenuManager},
+    shell::{
+        structs::{Menu, MenuItem},
+        Context, MenuHandle, MenuManager,
+    },
     util::{update_diff, DiffResult},
 };
 
@@ -15,6 +22,18 @@ pub struct PlatformMenu {
     pub(super) menu: HMENU,
     previous_menu: RefCell<Menu>,
     weak_self: RefCell<Weak<PlatformMenu>>,
+}
+
+pub struct PlatformMenuManager {}
+
+impl PlatformMenuManager {
+    pub fn new(context: Rc<Context>) -> Self {
+        Self {}
+    }
+
+    pub fn set_app_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+        Err(PlatformError::NotAvailable)
+    }
 }
 
 impl PlatformMenu {
@@ -54,7 +73,7 @@ impl PlatformMenu {
     ) -> MENUITEMINFOW {
         let submenu = item
             .submenu
-            .and_then(|h| manager.get_platform_menu(h))
+            .and_then(|h| manager.get_platform_menu(h).ok())
             .map(|m| m.menu)
             .unwrap_or_else(|| HMENU(0));
 

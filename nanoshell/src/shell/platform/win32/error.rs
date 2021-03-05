@@ -7,6 +7,7 @@ pub enum PlatformError {
     LaunchEngineFailure,
     SendMessageFailure { channel: String },
     HResult(u32),
+    NotAvailable,
 }
 
 pub type PlatformResult<T> = Result<T, PlatformError>;
@@ -30,6 +31,9 @@ impl Display for PlatformError {
                     hresult,
                     hresult_description(*hresult).unwrap_or("Unknown".into())
                 )
+            }
+            PlatformError::NotAvailable => {
+                write!(f, "Feature is not available")
             }
         }
     }

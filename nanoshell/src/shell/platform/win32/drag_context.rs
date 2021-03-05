@@ -8,7 +8,10 @@ use std::{
 use windows::create_instance;
 
 use crate::{
-    shell::{Context, DragData, DragEffect, DragRequest, DraggingInfo, IPoint},
+    shell::{
+        structs::{DragData, DragEffect, DragRequest, DraggingInfo},
+        Context, IPoint,
+    },
     util::LateRefCell,
 };
 
