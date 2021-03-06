@@ -183,13 +183,15 @@ class _MenuBarState extends State<MenuBar>
   FutureOr<MenuHandle> createOrUpdateMenuPre(
       Menu menu, List<MenuElement> elements) async {
     _elements = elements;
+    final hadSelected = _selectedElement != null;
+
     if (!_elements.contains(_selectedElement)) {
       _selectedElement = null;
     }
     if (!_elements.contains(_hoveredElement)) {
       _hoveredElement = null;
     }
-    if (_selectedElement == null) {
+    if (hadSelected && _selectedElement == null) {
       unfocus();
     }
     if (mounted) {
