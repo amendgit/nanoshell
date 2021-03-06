@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'package:nanoshell/src/util.dart';
 
+import 'util.dart';
 import 'constants.dart';
 import 'menu.dart';
 
@@ -31,6 +31,7 @@ class MenuElement {
         'separator': item.separator,
         'checked': item.checked,
         'role': item.role != null ? enumToString(item.role) : null,
+        'accelerator': item.accelerator?.serialize(),
       };
 }
 

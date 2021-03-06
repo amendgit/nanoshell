@@ -1,5 +1,6 @@
 library nanoshell;
 
+export 'src/accelerator.dart';
 export 'src/drag_drop.dart';
 export 'src/menu.dart';
 export 'src/menu_bar.dart';

@@ -4,11 +4,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nanoshell/nanoshell.dart';
-import 'package:nanoshell/src/key_interceptor.dart';
-import 'package:nanoshell/src/menu.dart';
 
+import 'key_interceptor.dart';
+import 'menu.dart';
 import 'menu_internal.dart';
+import 'window.dart';
+import 'window_widget.dart';
 
 class MenuBar extends StatefulWidget {
   final Menu menu;
@@ -315,7 +316,8 @@ class _MenuBarState extends State<MenuBar>
     return _elements.any((element) => !element.item.disabled);
   }
 
-  bool _onRawKeyEvent(RawKeyEvent event) {
+  bool _onRawKeyEvent(RawKeyEventEx _event) {
+    final event = _event.event;
     final hasEnabledElements = _hasEnabledElements;
     var focusRequested = false;
 

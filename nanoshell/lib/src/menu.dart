@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/material.dart';
 
+import 'accelerator.dart';
 import 'menu_internal.dart';
 import 'mutex.dart';
 
@@ -19,10 +20,10 @@ enum MenuRole {
 class MenuItem {
   MenuItem({
     required this.title,
-    required VoidCallback? action,
+    required this.action,
     this.checked = false,
+    this.accelerator,
   })  : separator = false,
-        _action = action,
         submenu = null,
         role = null;
 
@@ -30,30 +31,35 @@ class MenuItem {
     required this.title,
     required this.submenu,
   })   : separator = false,
-        _action = null,
+        action = null,
         checked = false,
-        role = null;
+        role = null,
+        accelerator = null;
 
   MenuItem.children({
     required String title,
     required List<MenuItem> children,
     MenuRole? role,
-  }) : this.builder(title: title, builder: () => children, role: role);
+  }) : this.builder(
+          title: title,
+          builder: () => children,
+          role: role,
+        );
 
   MenuItem.builder({
-    required this.title,
+    required String title,
     required MenuBuilder builder,
     MenuRole? role,
-  })  : _action = null,
-        separator = false,
-        checked = false,
-        role = null,
-        submenu = Menu._(builder, title: title, role: role);
+  }) : this.menu(
+          title: title,
+          submenu: Menu._(builder, title: title, role: role),
+        );
 
   MenuItem.withRole({
     required MenuItemRole role,
     String? title,
-  })  : _action = null,
+    this.accelerator,
+  })  : action = null,
         separator = false,
         checked = false,
         title = title ?? _titleForRole(role),
@@ -62,24 +68,26 @@ class MenuItem {
 
   MenuItem.separator()
       : title = '',
-        _action = null,
+        action = null,
         separator = true,
         checked = false,
         role = null,
-        submenu = null;
+        submenu = null,
+        accelerator = null;
 
   final String title;
   final MenuItemRole? role;
 
-  VoidCallback? get action => _action;
-  VoidCallback? _action;
+  final VoidCallback? action;
 
   final Menu? submenu;
 
   final bool separator;
   final bool checked;
 
-  bool get disabled => submenu == null && _action == null;
+  bool get disabled => submenu == null && action == null;
+
+  final Accelerator? accelerator;
 
   bool _canBeUpdatedFrom(MenuItem other) =>
       identical(this, other) ||

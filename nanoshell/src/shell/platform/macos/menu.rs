@@ -22,7 +22,10 @@ use objc::{
 
 use crate::{
     shell::structs::{Menu, MenuItem, MenuItemRole},
-    shell::{structs::MenuRole, Context, MenuHandle, MenuManager, ScheduledCallback},
+    shell::{
+        structs::{Accelerator, MenuRole},
+        Context, MenuHandle, MenuManager, ScheduledCallback,
+    },
     util::{update_diff, DiffResult, LateRefCell},
 };
 
@@ -335,6 +338,66 @@ impl PlatformMenu {
         }
     }
 
+    fn accelerator_label_to_string(&self, accelerator: &Accelerator) -> String {
+        let label = accelerator.label.to_lowercase();
+        let value = match label.as_str() {
+            // these must match label descriptions from accelerators.dart
+            "f1" => 0xF704,
+            "f2" => 0xF705,
+            "f3" => 0xF706,
+            "f4" => 0xF707,
+            "f5" => 0xF708,
+            "f6" => 0xF709,
+            "f7" => 0xF70A,
+            "f8" => 0xF70B,
+            "f9" => 0xF70C,
+            "f10" => 0xF70D,
+            "f11" => 0xF70E,
+            "f12" => 0xF70F,
+            "home" => 0xF729,
+            "end" => 0xF72B,
+            "insert" => 0xF727,
+            "delete" => 0xF728,
+            "backspace" => 0x0008,
+            "page up" => 0xF72C,
+            "page down" => 0xF72D,
+            "space" => 0x0020,
+            "tab" => 0x0009,
+            "enter" => 0x000d,
+            "up arrow" => 0xF700,
+            "down arrow" => 0xF701,
+            "left arrow" => 0xF702,
+            "right arrow" => 0xF703,
+            _ => label.chars().next().unwrap_or(0 as char) as u32,
+        };
+        let mut res = String::new();
+        if value > 0 {
+            res.push(std::char::from_u32(value).unwrap());
+        }
+        res
+    }
+
+    fn accelrator_label_to_modifier_flags(
+        &self,
+        accelerator: &Accelerator,
+    ) -> NSEventModifierFlags {
+        let mut res = NSEventModifierFlags::empty();
+        if accelerator.alt {
+            res |= NSEventModifierFlags::NSAlternateKeyMask;
+        }
+        if accelerator.meta {
+            res |= NSEventModifierFlags::NSCommandKeyMask;
+        }
+        if accelerator.control {
+            res |= NSEventModifierFlags::NSControlKeyMask;
+        }
+        if accelerator.shift {
+            res |= NSEventModifierFlags::NSShiftKeyMask;
+        }
+
+        return res;
+    }
+
     unsafe fn update_from_menu_item(
         &self,
         item: id,
@@ -352,6 +415,15 @@ impl PlatformMenu {
             let () = msg_send![item, setSubmenu: nil];
             let () = msg_send![item, setTarget: *self.target];
             let () = msg_send![item, setAction: sel!(onAction:)];
+
+            if let Some(accelerator) = &menu_item.accelerator {
+                let str = self.accelerator_label_to_string(accelerator);
+                if str.len() > 0 {
+                    let () = msg_send![item, setKeyEquivalent: to_nsstring(&str)];
+                    let () = msg_send![item, setKeyEquivalentModifierMask:
+                        self.accelrator_label_to_modifier_flags(accelerator)];
+                }
+            }
         }
 
         let () = msg_send![item, setTitle:*to_nsstring(&remove_mnemonics(&menu_item.title))];

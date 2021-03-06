@@ -237,6 +237,16 @@ pub enum MenuRole {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct Accelerator {
+    pub label: String,
+    pub alt: bool,
+    pub shift: bool,
+    pub meta: bool,
+    pub control: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct MenuItem {
     pub id: i64,
     pub title: String,
@@ -245,6 +255,7 @@ pub struct MenuItem {
     pub checked: bool,
     pub role: Option<MenuItemRole>,
     pub submenu: Option<MenuHandle>,
+    pub accelerator: Option<Accelerator>,
 }
 
 impl PartialEq for MenuItem {

@@ -5,13 +5,15 @@ use std::{
 
 use log::warn;
 
+use super::key_event::process_key_event;
+
 type SendPlatformMessage = extern "C" fn(usize, &Message) -> usize;
 
 struct Message {
-    size: isize,
+    size: usize,
     channel: *const i8,
     message: *const u8,
-    message_size: isize,
+    message_size: usize,
     response_handle: isize,
 }
 
@@ -19,21 +21,22 @@ extern "C" fn send_platform_message(engine: usize, message: &Message) -> usize {
     let channel = unsafe { CStr::from_ptr(message.channel) }
         .to_string_lossy()
         .to_string();
-    let channel = if channel == "flutter/keyevent" {
-        "nanoshell/keyevent".into()
+    if channel == "flutter/keyevent" {
+        let channel = CString::new("nanoshell/keyevent").unwrap();
+        let data = unsafe { std::slice::from_raw_parts(message.message, message.message_size) };
+        let data: Vec<u8> = data.into();
+        let data = process_key_event(data);
+        let message = Message {
+            size: message.size,
+            channel: channel.as_ptr(),
+            message: data.as_ptr(),
+            message_size: data.len(),
+            response_handle: message.response_handle,
+        };
+        SEND_PLATFORM_MESSAGE.with(|f| f.get().unwrap()(engine, &message))
     } else {
-        channel
-    };
-    let channel = CString::new(channel.as_str()).unwrap();
-    let message = Message {
-        size: message.size,
-        channel: channel.as_ptr(),
-        message: message.message,
-        message_size: message.message_size,
-        response_handle: message.response_handle,
-    };
-
-    SEND_PLATFORM_MESSAGE.with(|f| f.get().unwrap()(engine, &message))
+        SEND_PLATFORM_MESSAGE.with(|f| f.get().unwrap()(engine, &message))
+    }
 }
 
 thread_local! {

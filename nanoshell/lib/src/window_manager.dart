@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
-import 'package:nanoshell/src/key_interceptor.dart';
 
+import 'key_interceptor.dart';
 import 'constants.dart';
 import 'drag_drop.dart';
 import 'event.dart';

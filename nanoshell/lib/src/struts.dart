@@ -1,7 +1,6 @@
 import 'dart:ui';
 
-import 'package:nanoshell/nanoshell.dart';
-
+import 'menu.dart';
 import 'util.dart';
 
 extension OffsetExt on Offset {
