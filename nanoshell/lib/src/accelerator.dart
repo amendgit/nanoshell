@@ -50,11 +50,13 @@ class Accelerator {
   }
 
   bool matches(RawKeyEventEx event) {
+    final key = this.key?.key;
     return event.altPressed == alt &&
         event.controlPressed == control &&
         event.metaPressed == meta &&
         event.shiftPressed == shift &&
-        event.keyWithoutModifiers == key?.key;
+        key != null &&
+        (key == event.keyWithoutModifiers || key == event.keyWithoutModifiers2);
   }
 
   LogicalKeyboardKey _keyForCodeUnit(int codeUnit) {

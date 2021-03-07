@@ -23,7 +23,7 @@ fn main() -> () {
                 MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
                 MFT_STRING, MFT_SEPARATOR, MFS_DISABLED, MFS_CHECKED, MFS_ENABLED, MFT_OWNERDRAW, MFS_HILITE,
                 WH_MSGFILTER, MSGF_MENU,
-                UIS_CLEAR, UIS_SET, UISF_HIDEACCEL, VK_LBUTTON, VK_RBUTTON, VK_LEFT, VK_RIGHT, VK_DOWN,
+                UIS_CLEAR, UIS_SET, UISF_HIDEACCEL, VK_LBUTTON, VK_RBUTTON, VK_LEFT, VK_RIGHT, VK_DOWN, VK_SHIFT,
                 CF_HDROP, MK_LBUTTON,
                 DRAGDROP_S_CANCEL, DRAGDROP_S_DROP, DRAGDROP_S_USEDEFAULTCURSORS,
                 RDW_FRAME,
@@ -56,7 +56,7 @@ fn main() -> () {
             },
             windows::win32::keyboard_and_mouse_input::{
                 SetFocus, EnableWindow, IsWindowEnabled, SetActiveWindow, ReleaseCapture, SetCapture,
-                GetCapture, GetAsyncKeyState, GetKeyboardState, GetKeyState, TrackMouseEvent,
+                GetCapture, GetAsyncKeyState, GetKeyboardState, GetKeyState, TrackMouseEvent, ToUnicode,
             },
             windows::win32::debug::{
                 IsDebuggerPresent, FlashWindowEx, GetLastError, FormatMessageW,
