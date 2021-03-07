@@ -3,8 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-
-const channel = BasicMessageChannel('nanoshell/keyevent', BinaryCodec());
+import 'package:pedantic/pedantic.dart';
 
 class RawKeyEventEx {
   RawKeyEventEx(
@@ -36,6 +35,83 @@ class RawKeyEventEx {
 }
 
 typedef KeyInterceptorHandler = bool Function(RawKeyEventEx event);
+
+enum InterceptorStage {
+  pre, // interceptor executed before flutter keyboard handler (for all events)
+  post, // interceptor executed after flutter keyboard handler (for unhandled events only)
+}
+
+class KeyInterceptor {
+  KeyInterceptor._() {
+    WidgetsFlutterBinding.ensureInitialized();
+    _channel.setMessageHandler(_onMessage);
+  }
+
+  void registerHandler(
+    KeyInterceptorHandler handler, {
+    required InterceptorStage stage,
+  }) {
+    if (stage == InterceptorStage.pre) {
+      _handlersPre.add(handler);
+    } else {
+      _handlersPost.add(handler);
+    }
+  }
+
+  void unregisterHandler(
+    KeyInterceptorHandler handler, {
+    required InterceptorStage stage,
+  }) {
+    if (stage == InterceptorStage.pre) {
+      _handlersPre.add(handler);
+    } else {
+      _handlersPost.add(handler);
+    }
+  }
+
+  static final KeyInterceptor instance = KeyInterceptor._();
+
+  final _handlersPre = <KeyInterceptorHandler>[];
+  final _handlersPost = <KeyInterceptorHandler>[];
+
+  static ByteData _dataForHandled(bool handled) {
+    final res = <String, dynamic>{'handled': handled};
+    return StringCodec().encodeMessage(json.encode(res))!;
+  }
+
+  Future<ByteData> _onMessage(ByteData? message) async {
+    final keyMessage = json.decode(StringCodec().decodeMessage(message) ?? '');
+
+    final event = _keyEventFromMessage(keyMessage);
+
+    for (final handler in List<KeyInterceptorHandler>.from(_handlersPre)) {
+      if (handler(event)) {
+        return Future.value(_dataForHandled(true));
+      }
+    }
+
+    final completer = Completer<ByteData>();
+    unawaited(WidgetsBinding.instance?.defaultBinaryMessenger
+        .handlePlatformMessage('flutter/keyevent', message, (data) {
+      // macos with FN pressed seems to return null?
+      data ??= _dataForHandled(false);
+
+      completer.complete(data);
+    }));
+    final data = await completer.future;
+    final response = json.decode(StringCodec().decodeMessage(data) ?? '');
+    if (response['handled'] == false) {
+      for (final handler in List<KeyInterceptorHandler>.from(_handlersPost)) {
+        if (handler(event)) {
+          return Future.value(_dataForHandled(true));
+        }
+      }
+    }
+    return data;
+  }
+}
+
+const _channel = BasicMessageChannel('nanoshell/keyevent', BinaryCodec());
 
 RawKeyEventEx _keyEventFromMessage(Map<String, dynamic> message) {
   final noModifiers = message['charactersIgnoringModifiersEx'] as String?;
@@ -82,50 +158,4 @@ LogicalKeyboardKey _keyFromCharacters(String characters, RawKeyEvent event) {
   } else {
     return event.logicalKey;
   }
-}
-
-class KeyInterceptor {
-  KeyInterceptor._() {
-    channel.setMessageHandler(_onMessage);
-  }
-
-  static ByteData _dataForHandled(bool handled) {
-    final res = <String, dynamic>{'handled': handled};
-    return StringCodec().encodeMessage(json.encode(res))!;
-  }
-
-  Future<ByteData> _onMessage(ByteData? message) {
-    final string = StringCodec().decodeMessage(message) ?? '';
-    final keyMessage = json.decode(string);
-
-    final event = _keyEventFromMessage(keyMessage);
-
-    for (final handler in List<KeyInterceptorHandler>.from(_handlers)) {
-      if (handler(event)) {
-        return Future.value(_dataForHandled(true));
-      }
-    }
-
-    final completer = Completer<ByteData>();
-    WidgetsBinding.instance?.defaultBinaryMessenger
-        .handlePlatformMessage('flutter/keyevent', message, (data) {
-      // macos with FN pressed seems to return null?
-      data ??= _dataForHandled(false);
-
-      completer.complete(data);
-    });
-    return completer.future;
-  }
-
-  void registerHandler(KeyInterceptorHandler handler) {
-    _handlers.add(handler);
-  }
-
-  void unregisterHandler(KeyInterceptorHandler handler) {
-    _handlers.remove(handler);
-  }
-
-  final _handlers = <KeyInterceptorHandler>[];
-
-  static final KeyInterceptor instance = KeyInterceptor._();
 }

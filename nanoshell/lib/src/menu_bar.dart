@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nanoshell/nanoshell.dart';
 
 import 'key_interceptor.dart';
 import 'menu.dart';
@@ -209,15 +210,24 @@ class _MenuBarState extends State<MenuBar>
   }
 
   static Completer? _currentMenuCompleter;
+  static Menu? _currentMenu;
 
   void updateMenu(Menu menu) {
+    if (_currentMenu == menu) {
+      return;
+    }
+
     final previousCompleter = _currentMenuCompleter;
+
+    _currentMenu = menu;
+    accelerators.registerMenu(menu);
 
     final menuCompleter = Completer();
     _currentMenuCompleter = menuCompleter;
 
     menu.materialize((handle) async {
-      return menuCompleter.future;
+      await menuCompleter.future;
+      accelerators.unregisterMenu(menu);
     }, this);
 
     if (previousCompleter != null) {
@@ -422,7 +432,9 @@ class _MenuBarState extends State<MenuBar>
   void initState() {
     super.initState();
     MenuManager.instance().registerDelegate(this);
-    KeyInterceptor.instance.registerHandler(_onRawKeyEvent);
+    // handle keyboard events before flutter event processing
+    KeyInterceptor.instance
+        .registerHandler(_onRawKeyEvent, stage: InterceptorStage.pre);
     _firstBuild = true;
   }
 
@@ -430,7 +442,8 @@ class _MenuBarState extends State<MenuBar>
   void dispose() {
     super.dispose();
     MenuManager.instance().unregisterDelegate(this);
-    KeyInterceptor.instance.unregisterHandler(_onRawKeyEvent);
+    KeyInterceptor.instance
+        .unregisterHandler(_onRawKeyEvent, stage: InterceptorStage.pre);
     WindowContext.of(context).unregisterTapCallback(_onWindowTap);
   }
 

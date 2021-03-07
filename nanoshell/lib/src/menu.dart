@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:nanoshell/src/key_interceptor.dart';
 
 import 'accelerator.dart';
 import 'menu_internal.dart';
@@ -89,15 +90,17 @@ class MenuItem {
 
   final Accelerator? accelerator;
 
-  bool _canBeUpdatedFrom(MenuItem other) =>
+  @override
+  bool operator ==(dynamic other) =>
       identical(this, other) ||
-      (separator && other.separator) ||
-      (title == other.title &&
+      (other is MenuItem && separator && other.separator) ||
+      (other is MenuItem &&
+          title == other.title &&
           (submenu == null) == (other.submenu == null) &&
           role == other.role);
 
-  int get _canBeUpdatedFromHashCode =>
-      hashValues(title, separator, submenu != null);
+  @override
+  int get hashCode => hashValues(title, separator, submenu != null);
 
   static String _titleForRole(MenuItemRole role) {
     switch (role) {
@@ -134,21 +137,21 @@ class Menu {
   final String title;
   MenuBuilder builder;
 
-  static final mutex = Mutex();
+  static final _mutex = Mutex();
 
   Future<T> materialize<T>(Future<T> Function(MenuHandle) callback,
       [MenuMaterializer? materializer]) async {
-    final handle = await mutex.protect(() async {
+    final handle = await _mutex.protect(() async {
       _materializer = materializer;
       return _materializeLocked();
     });
     final res = await callback(handle);
-    await mutex.protect(() => _unmaterializeLocked());
+    await _mutex.protect(() => _unmaterializeLocked());
     return res;
   }
 
   Future<void> update() async {
-    final res = mutex.protect(() => _updateLocked());
+    final res = _mutex.protect(() => _updateLocked());
     return res;
   }
 
@@ -294,7 +297,7 @@ class Menu {
   }
 
   bool onAction(int itemId) {
-    if (_onAction(itemId)) {
+    if (_transferTarget._onAction(itemId)) {
       return true;
     }
     final pastAction = _pastActions[itemId];
@@ -303,6 +306,23 @@ class Menu {
       return true;
     }
     return false;
+  }
+
+  VoidCallback? actionForEvent(RawKeyEventEx event) {
+    for (final e in _transferTarget._currentElements) {
+      if (e.item.action != null &&
+          e.item.accelerator != null &&
+          e.item.accelerator!.matches(event)) {
+        return e.item.action;
+      }
+      if (e.item.submenu != null) {
+        final r = e.item.submenu!.actionForEvent(event);
+        if (r != null) {
+          return r;
+        }
+      }
+    }
+    return null;
   }
 
   List<MenuElement> _currentElements = [];
@@ -322,11 +342,8 @@ class Menu {
 
     _pastActions.clear();
 
-    final currentByItem = HashMap<MenuItem, MenuElement>(
-      equals: (e1, e2) => e1._canBeUpdatedFrom(e2),
-      hashCode: (e) => e._canBeUpdatedFromHashCode,
-    );
-    currentByItem.addEntries(_currentElements.map((e) => MapEntry(e.item, e)));
+    final currentByItem = HashMap<MenuItem, MenuElement>.fromEntries(
+        _currentElements.map((e) => MapEntry(e.item, e)));
 
     final currentByMenu = HashMap.fromEntries(_currentElements
         .where((element) => element.item.submenu != null)

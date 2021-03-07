@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'key_interceptor.dart';
+import 'menu.dart';
 
 class AcceleratorKey {
   AcceleratorKey(this.key, this.label);
@@ -49,6 +51,19 @@ class Accelerator {
     }
   }
 
+  @override
+  bool operator ==(dynamic other) =>
+      identical(this, other) ||
+      (other is Accelerator &&
+          alt == other.alt &&
+          control == other.control &&
+          meta == other.meta &&
+          shift == other.shift &&
+          key?.key == other.key?.key);
+
+  @override
+  int get hashCode => hashValues(alt, control, meta, shift, key?.key);
+
   bool matches(RawKeyEventEx event) {
     final key = this.key?.key;
     return event.altPressed == alt &&
@@ -80,3 +95,57 @@ class Accelerator {
         }
       : null;
 }
+
+class AcceleratorRegistry {
+  AcceleratorRegistry._() {
+    KeyInterceptor.instance
+        .registerHandler(_handleKeyEvent, stage: InterceptorStage.post);
+  }
+
+  void register(Accelerator accelerator, VoidCallback callback) {
+    _accelerators[accelerator] = callback;
+  }
+
+  void unregister(Accelerator accelerator) {
+    _accelerators.remove(accelerator);
+  }
+
+  void registerMenu(Menu menu) {
+    _menus.add(menu);
+  }
+
+  void unregisterMenu(Menu menu) {
+    _menus.remove(menu);
+  }
+
+  bool _handleKeyEvent(RawKeyEventEx event) {
+    var handled = false;
+    if (event.event is RawKeyDownEvent) {
+      for (final a in _accelerators.entries) {
+        if (a.key.matches(event)) {
+          a.value();
+          handled = true;
+          break;
+        }
+      }
+    }
+
+    if (!handled) {
+      for (final m in _menus) {
+        final action = m.actionForEvent(event);
+        if (action != null) {
+          action();
+          handled = true;
+          break;
+        }
+      }
+    }
+
+    return handled;
+  }
+
+  final _accelerators = <Accelerator, VoidCallback>{};
+  final _menus = <Menu>[];
+}
+
+final accelerators = AcceleratorRegistry._();
