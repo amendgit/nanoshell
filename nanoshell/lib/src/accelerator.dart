@@ -99,7 +99,7 @@ class Accelerator {
 class AcceleratorRegistry {
   AcceleratorRegistry._() {
     KeyInterceptor.instance
-        .registerHandler(_handleKeyEvent, stage: InterceptorStage.post);
+        .registerHandler(_handleKeyEvent, stage: InterceptorStage.pre);
   }
 
   void register(Accelerator accelerator, VoidCallback callback) {
@@ -128,15 +128,15 @@ class AcceleratorRegistry {
           break;
         }
       }
-    }
 
-    if (!handled) {
-      for (final m in _menus) {
-        final action = m.actionForEvent(event);
-        if (action != null) {
-          action();
-          handled = true;
-          break;
+      if (!handled) {
+        for (final m in _menus) {
+          final action = m.actionForEvent(event);
+          if (action != null) {
+            action();
+            handled = true;
+            break;
+          }
         }
       }
     }

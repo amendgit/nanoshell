@@ -27,11 +27,11 @@ pub struct PlatformMenu {
 pub struct PlatformMenuManager {}
 
 impl PlatformMenuManager {
-    pub fn new(context: Rc<Context>) -> Self {
+    pub fn new(_context: Rc<Context>) -> Self {
         Self {}
     }
 
-    pub fn set_app_menu(&self, menu: Rc<PlatformMenu>) -> PlatformResult<()> {
+    pub fn set_app_menu(&self, _menu: Rc<PlatformMenu>) -> PlatformResult<()> {
         Err(PlatformError::NotAvailable)
     }
 }
@@ -139,14 +139,14 @@ impl PlatformMenu {
                     // nothing
                 }
                 DiffResult::Update(old, new) => {
-                    let title = to_utf16(&new.title);
+                    let title = to_utf16(&self.title_for_item(&new));
                     let mut info = Self::get_menu_item_info(new, &title, manager);
                     unsafe {
                         SetMenuItemInfoW(self.menu, old.id as u32, FALSE, &mut info as *mut _);
                     }
                 }
                 DiffResult::Insert(item) => {
-                    let title = to_utf16(&item.title);
+                    let title = to_utf16(&self.title_for_item(&item));
                     let mut info = Self::get_menu_item_info(item, &title, manager);
                     unsafe {
                         InsertMenuItemW(self.menu, i as u32, TRUE, &mut info as *mut _);
@@ -158,6 +158,37 @@ impl PlatformMenu {
         *previous_menu = menu;
 
         Ok(())
+    }
+
+    fn title_for_item(&self, item: &MenuItem) -> String {
+        let mut res = item.title.clone();
+        if let Some(accelerator) = &item.accelerator {
+            let mut separator = '\t';
+
+            if accelerator.control {
+                res.push(separator);
+                res.push_str("Ctrl");
+                separator = '+';
+            }
+            if accelerator.alt {
+                res.push(separator);
+                res.push_str("Alt");
+                separator = '+';
+            }
+            if accelerator.shift {
+                res.push(separator);
+                res.push_str("Shift");
+                separator = '+';
+            }
+            if accelerator.meta {
+                res.push(separator);
+                res.push_str("Win");
+                separator = '+';
+            }
+            res.push(separator);
+            res.push_str(&accelerator.label);
+        }
+        res
     }
 
     fn can_update(_old_item: &MenuItem, _new_item: &MenuItem) -> bool {
