@@ -29,8 +29,7 @@ extern "C" {
     );
 }
 
-#[no_mangle]
-pub extern "C" fn unmodified_character_for_virtual_key(scancode: i64) -> u16 {
+fn unmodified_character_for_virtual_key(scancode: i64) -> (u16, u16) {
     unsafe {
         let input_source = TISCopyCurrentKeyboardLayoutInputSource();
         let layout_data: CFObject =
@@ -40,6 +39,7 @@ pub extern "C" fn unmodified_character_for_virtual_key(scancode: i64) -> u16 {
 
         let mut dead_key_state: u32 = 0;
         let mut unichar: u16 = 0;
+        let mut unichar_shift: u16 = 0;
         let mut unichar_count: c_ulong = 0;
 
         #[allow(non_upper_case_globals)]
@@ -48,6 +48,8 @@ pub extern "C" fn unmodified_character_for_virtual_key(scancode: i64) -> u16 {
         const kUCKeyTranslateNoDeadKeysBit: u32 = 0;
         #[allow(non_upper_case_globals)]
         const kUCKeyTranslateNoDeadKeysMask: u32 = 1 << kUCKeyTranslateNoDeadKeysBit;
+        #[allow(non_upper_case_globals)]
+        const shiftKey: u32 = 512;
 
         UCKeyTranslate(
             layout as *mut _,
@@ -62,8 +64,21 @@ pub extern "C" fn unmodified_character_for_virtual_key(scancode: i64) -> u16 {
             &mut unichar as *mut _,
         );
 
+        UCKeyTranslate(
+            layout as *mut _,
+            scancode as u16,
+            kUCKeyActionDisplay,
+            (shiftKey >> 8) & 0xFF,
+            LMGetKbdType(),
+            kUCKeyTranslateNoDeadKeysMask,
+            &mut dead_key_state as *mut _,
+            1,
+            &mut unichar_count as *mut _,
+            &mut unichar_shift as *mut _,
+        );
+
         CFRelease(input_source);
-        return unichar;
+        return (unichar, unichar_shift);
     }
 }
 
@@ -72,6 +87,7 @@ pub extern "C" fn unmodified_character_for_virtual_key(scancode: i64) -> u16 {
 struct KeyEvent {
     characters_ignoring_modifiers: Option<String>,
     characters_ignoring_modifiers_ex: Option<String>,
+    characters_ignoring_modifiers_except_shift_ex: Option<String>,
     key_code: isize,
     #[serde(flatten)]
     other: serde_json::Map<String, serde_json::Value>,
@@ -86,7 +102,9 @@ pub fn process_key_event(data: Vec<u8>) -> Vec<u8> {
     if let Some(_) = &event.characters_ignoring_modifiers {
         let char = unmodified_character_for_virtual_key(event.key_code as i64);
         event.characters_ignoring_modifiers_ex =
-            Some(String::from_utf16_lossy(std::slice::from_ref(&char)));
+            Some(String::from_utf16_lossy(std::slice::from_ref(&char.0)));
+        event.characters_ignoring_modifiers_except_shift_ex =
+            Some(String::from_utf16_lossy(std::slice::from_ref(&char.1)));
     }
     serde_json::to_vec(&event).unwrap()
 }
